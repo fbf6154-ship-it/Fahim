@@ -7,9 +7,11 @@ import telebot
 from telebot import types
 
 # --- ⚙️ CONFIGURATION ---
-BOT_TOKEN = os.environ.get("TOKEN", "8866225707:AAF5pFN98buwo2ygG3GYhhCjuU0u71CX3aE")
+BOT_TOKEN = os.environ.get("TOKEN", "8802176680:AAFmyUJ1XIHFTVtXyLv3xcP6JdoEzj6c6JA")
 ADMIN_ID = "7166927766"  # আপনার এডমিন আইডি
-PAYMENT_CHANNEL = "@tbpycofficial"  # নোটিফিকেশন চ্যানেল
+DEFAULT_CHANNEL_ID = "@FHx_Technical_Creator"
+DEFAULT_CHANNEL_URL = "https://t.me/FHx_Technical_Creator"
+PAYMENT_CHANNEL = "@FHx_Technical_Creator"  # পেমেন্ট নোটিফিকেশন চ্যানেল
 
 # Firebase Realtime Database URL
 FIREBASE_URL = "https://tournament-ace22-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -21,7 +23,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Telegram Refer & Admin Bot with Dynamic Channels is Running 24/7!"
+    return "🤖 Telegram Refer & Admin Bot is Running 24/7 with UptimeRobot!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -30,27 +32,27 @@ def run_flask():
 # --- 🗄️ FIREBASE DATABASE FUNCTIONS ---
 def get_user(user_id):
     try:
-        res = requests.get(f"{FIREBASE_URL}/users/{user_id}.json")
+        res = requests.get(f"{FIREBASE_URL}/users/{user_id}.json", timeout=5)
         return res.json() or {}
     except:
         return {}
 
 def update_user(user_id, data):
     try:
-        requests.patch(f"{FIREBASE_URL}/users/{user_id}.json", json=data)
+        requests.patch(f"{FIREBASE_URL}/users/{user_id}.json", json=data, timeout=5)
     except Exception as e:
         print(f"Error updating user: {e}")
 
 def delete_user_from_db(user_id):
     try:
-        requests.delete(f"{FIREBASE_URL}/users/{user_id}.json")
+        requests.delete(f"{FIREBASE_URL}/users/{user_id}.json", timeout=5)
         return True
     except:
         return False
 
 def get_all_users():
     try:
-        res = requests.get(f"{FIREBASE_URL}/users.json")
+        res = requests.get(f"{FIREBASE_URL}/users.json", timeout=5)
         data = res.json()
         if isinstance(data, dict):
             return data
@@ -62,21 +64,21 @@ def get_all_users():
 
 def save_withdrawal(w_id, data):
     try:
-        requests.put(f"{FIREBASE_URL}/withdrawals/{w_id}.json", json=data)
+        requests.put(f"{FIREBASE_URL}/withdrawals/{w_id}.json", json=data, timeout=5)
     except Exception as e:
         print(f"Error saving withdrawal: {e}")
 
 def get_withdrawal(w_id):
     try:
-        res = requests.get(f"{FIREBASE_URL}/withdrawals/{w_id}.json")
+        res = requests.get(f"{FIREBASE_URL}/withdrawals/{w_id}.json", timeout=5)
         return res.json()
     except:
         return None
 
-# --- 📢 SAFE DYNAMIC CHANNELS MANAGEMENT ---
+# --- 📢 DYNAMIC CHANNELS MANAGEMENT ---
 def get_channels():
     try:
-        res = requests.get(f"{FIREBASE_URL}/channels.json")
+        res = requests.get(f"{FIREBASE_URL}/channels.json", timeout=5)
         data = res.json()
         clean_channels = {}
         
@@ -84,7 +86,7 @@ def get_channels():
             for k, v in data.items():
                 if isinstance(v, dict):
                     clean_channels[k] = v
-                elif isinstance(v, str):
+                elif isinstance(v, str) and not v.startswith("{"):
                     clean_channels[k] = {
                         "channel_id": v,
                         "url": f"https://t.me/{v.replace('@', '')}",
@@ -94,7 +96,7 @@ def get_channels():
             for i, v in enumerate(data):
                 if isinstance(v, dict):
                     clean_channels[str(i)] = v
-                elif isinstance(v, str):
+                elif isinstance(v, str) and not v.startswith("{"):
                     clean_channels[str(i)] = {
                         "channel_id": v,
                         "url": f"https://t.me/{v.replace('@', '')}",
@@ -112,7 +114,7 @@ def save_channel_to_db(ch_id, url, title):
             "url": url,
             "title": title
         }
-        requests.put(f"{FIREBASE_URL}/channels/{clean_key}.json", json=payload)
+        requests.put(f"{FIREBASE_URL}/channels/{clean_key}.json", json=payload, timeout=5)
         return True
     except:
         return False
@@ -120,34 +122,40 @@ def save_channel_to_db(ch_id, url, title):
 def remove_channel_from_db(ch_id):
     try:
         clean_key = ch_id.replace("@", "").replace("-", "_").replace(".", "_")
-        requests.delete(f"{FIREBASE_URL}/channels/{clean_key}.json")
+        requests.delete(f"{FIREBASE_URL}/channels/{clean_key}.json", timeout=5)
         return True
     except:
         return False
 
-# --- 🔍 DYNAMIC CHANNEL MEMBERSHIP CHECK ---
+# ডিফল্ট চ্যানেল ইনিশিয়ালাইজ
+def init_default_channels():
+    channels = get_channels()
+    if not channels:
+        save_channel_to_db(DEFAULT_CHANNEL_ID, DEFAULT_CHANNEL_URL, "🔗 Join Channel 1")
+
+init_default_channels()
+
+# --- 🔍 STRICT MEMBERSHIP CHECK (কঠোর ভেরিফিকেশন) ---
 def is_joined(user_id):
     channels = get_channels()
     if not channels:
-        return True
+        # কোনো চ্যানেল না থাকলে ডিফল্ট চ্যানেল চেক করবে
+        channels = {"default": {"channel_id": DEFAULT_CHANNEL_ID}}
 
     for key, ch in channels.items():
-        if isinstance(ch, dict):
-            ch_id = ch.get("channel_id")
-        elif isinstance(ch, str):
-            ch_id = ch
-        else:
-            continue
-
-        if not ch_id:
+        ch_id = ch.get("channel_id") if isinstance(ch, dict) else ch
+        if not ch_id or not isinstance(ch_id, str):
             continue
 
         try:
             member = bot.get_chat_member(ch_id, user_id)
-            if member.status in ['left', 'kicked']:
+            # শুধুমাত্র member, administrator বা creator হলেই ভেরিফাই হবে
+            if member.status not in ['member', 'administrator', 'creator']:
                 return False
-        except Exception:
-            pass
+        except Exception as e:
+            # বট এডমিন না থাকলে বা ইউজার না থাকলে ভেরিফিকেশন আটকে দিবে
+            print(f"Verification Check Error for {ch_id}: {e}")
+            return False
     return True
 
 # --- ⌨️ KEYBOARDS ---
@@ -163,14 +171,18 @@ def join_keyboard():
     markup = types.InlineKeyboardMarkup()
     channels = get_channels()
     
-    if not channels:
-        markup.add(types.InlineKeyboardButton("🔗 Join Channel 1", url="https://t.me/tbpycofficial"))
-    else:
+    valid_channels = False
+    if channels:
         for key, ch in channels.items():
-            if isinstance(ch, dict):
-                btn_title = ch.get("title", "🔗 Join Channel")
-                btn_url = ch.get("url", "https://t.me/tbpycofficial")
-                markup.add(types.InlineKeyboardButton(btn_title, url=btn_url))
+            if isinstance(ch, dict) and "url" in ch and "http" in ch.get("url", ""):
+                btn_title = ch.get("title", "🔗 Join Channel 1")
+                btn_url = ch.get("url")
+                if "deactivated" not in btn_url and "error" not in btn_url:
+                    markup.add(types.InlineKeyboardButton(btn_title, url=btn_url))
+                    valid_channels = True
+        
+    if not valid_channels:
+        markup.add(types.InlineKeyboardButton("🔗 Join Channel 1", url=DEFAULT_CHANNEL_URL))
         
     markup.add(types.InlineKeyboardButton("✅ Verify Membership", callback_data="verify_membership"))
     return markup
@@ -224,13 +236,14 @@ def start(message):
             reply_markup=join_keyboard()
         )
 
-# --- 🔍 VERIFY MEMBERSHIP CALLBACK ---
+# --- 🔍 VERIFY CALLBACK ---
 @bot.callback_query_handler(func=lambda call: call.data == "verify_membership")
 def verify_callback(call):
     user_id = str(call.from_user.id)
     if is_joined(user_id):
         user_data = get_user(user_id)
         
+        # রেফার বোনাস প্রদান
         referrer_id = user_data.get("referred_by")
         if referrer_id and not user_data.get("bonus_claimed"):
             ref_data = get_user(referrer_id)
@@ -255,9 +268,9 @@ def verify_callback(call):
             reply_markup=main_menu()
         )
     else:
-        bot.answer_callback_query(call.id, "❌ You haven't joined all channels yet! Please join first.", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ You haven't joined our channel yet! Please join first.", show_alert=True)
 
-# --- 📱 USER MENU HANDLERS ---
+# --- 📱 USER BUTTON HANDLERS ---
 @bot.message_handler(func=lambda m: m.text == "🖥️ Account")
 def account(message):
     user_id = str(message.chat.id)
@@ -315,7 +328,7 @@ def save_wallet(message):
     update_user(user_id, {"wallet": wallet_number})
     bot.send_message(user_id, f"✅ <b>Wallet successfully updated to:</b> <code>{wallet_number}</code>", reply_markup=main_menu())
 
-# --- 💲 WITHDRAWAL & ADMIN APPROVAL ---
+# --- 💲 WITHDRAWAL SYSTEM ---
 @bot.message_handler(func=lambda m: m.text == "💲 Withdrawal")
 def withdraw_prompt(message):
     user_id = str(message.chat.id)
@@ -487,7 +500,7 @@ def admin_del_channel(message):
     except:
         bot.send_message(ADMIN_ID, "⚠️ <b>ব্যবহার:</b>\n<code>/delchannel @channel_username</code>")
 
-# --- 👑 OTHER ADMIN COMMANDS ---
+# --- 👑 ADMIN USER MANAGEMENT ---
 @bot.message_handler(commands=['admin'])
 def admin_help(message):
     if str(message.chat.id) != ADMIN_ID:
@@ -598,7 +611,7 @@ def support(message):
     msg = """☎️ <b>উইথড্র দেওয়ার ২৪ ঘন্টার মধ্যে পেমেন্ট না পেলে যোগাযোগ করুন:</b>
 👤 @Promoter_from_bd
 
-📢 <b>উইথড্র দেওয়ার পর অবশ্যই নক দিবেন:</b> @tbpycofficial"""
+📢 <b>উইথড্র দেওয়ার পর অবশ্যই নক দিবেন:</b> @FHx_Technical_Creator"""
     bot.send_message(message.chat.id, msg)
 
 @bot.message_handler(func=lambda m: m.text == "📊 Status")
@@ -610,7 +623,7 @@ def status(message):
 # --- 🚀 RUN BOT ---
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
-    print("Bot is running with Dynamic Admin Channels & Firebase...")
+    print("Bot is running strictly with Admin Channels & Firebase...")
     while True:
         try:
             bot.infinity_polling(timeout=10, long_polling_timeout=5)
