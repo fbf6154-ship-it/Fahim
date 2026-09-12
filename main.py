@@ -52,7 +52,11 @@ def get_all_users():
     try:
         res = requests.get(f"{FIREBASE_URL}/users.json")
         data = res.json()
-        return data if data else {}
+        if isinstance(data, dict):
+            return data
+        elif isinstance(data, list):
+            return {str(i): v for i, v in enumerate(data) if v is not None}
+        return {}
     except:
         return {}
 
@@ -69,18 +73,39 @@ def get_withdrawal(w_id):
     except:
         return None
 
-# --- 📢 DYNAMIC CHANNELS FIREBASE MANAGEMENT ---
+# --- 📢 SAFE DYNAMIC CHANNELS MANAGEMENT ---
 def get_channels():
     try:
         res = requests.get(f"{FIREBASE_URL}/channels.json")
         data = res.json()
-        return data if data else {}
+        clean_channels = {}
+        
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    clean_channels[k] = v
+                elif isinstance(v, str):
+                    clean_channels[k] = {
+                        "channel_id": v,
+                        "url": f"https://t.me/{v.replace('@', '')}",
+                        "title": "🔗 Join Channel"
+                    }
+        elif isinstance(data, list):
+            for i, v in enumerate(data):
+                if isinstance(v, dict):
+                    clean_channels[str(i)] = v
+                elif isinstance(v, str):
+                    clean_channels[str(i)] = {
+                        "channel_id": v,
+                        "url": f"https://t.me/{v.replace('@', '')}",
+                        "title": "🔗 Join Channel"
+                    }
+        return clean_channels
     except:
         return {}
 
 def save_channel_to_db(ch_id, url, title):
     try:
-        # Firebase কী তৈরির জন্য ফরম্যাট ঠিক করা
         clean_key = ch_id.replace("@", "").replace("-", "_").replace(".", "_")
         payload = {
             "channel_id": ch_id,
@@ -100,14 +125,6 @@ def remove_channel_from_db(ch_id):
     except:
         return False
 
-# ডিফল্ট চ্যানেল ইনিশিয়ালাইজ (যদি ডাটাবেজ ফাঁকা থাকে)
-def init_default_channels():
-    channels = get_channels()
-    if not channels:
-        save_channel_to_db("@tbpycofficial", "https://t.me/tbpycofficial", "🔗 Join Channel 1")
-
-init_default_channels()
-
 # --- 🔍 DYNAMIC CHANNEL MEMBERSHIP CHECK ---
 def is_joined(user_id):
     channels = get_channels()
@@ -115,13 +132,21 @@ def is_joined(user_id):
         return True
 
     for key, ch in channels.items():
-        ch_id = ch.get("channel_id")
+        if isinstance(ch, dict):
+            ch_id = ch.get("channel_id")
+        elif isinstance(ch, str):
+            ch_id = ch
+        else:
+            continue
+
+        if not ch_id:
+            continue
+
         try:
             member = bot.get_chat_member(ch_id, user_id)
             if member.status in ['left', 'kicked']:
                 return False
         except Exception:
-            # বট যদি চ্যানেলে এডমিন না থাকে তবে স্কিপ করবে
             pass
     return True
 
@@ -138,16 +163,19 @@ def join_keyboard():
     markup = types.InlineKeyboardMarkup()
     channels = get_channels()
     
-    # ডাটাবেজের সব চ্যানেলকে বাটনে রূপান্তর
-    for key, ch in channels.items():
-        btn_title = ch.get("title", "🔗 Join Channel")
-        btn_url = ch.get("url", "https://t.me/")
-        markup.add(types.InlineKeyboardButton(btn_title, url=btn_url))
+    if not channels:
+        markup.add(types.InlineKeyboardButton("🔗 Join Channel 1", url="https://t.me/tbpycofficial"))
+    else:
+        for key, ch in channels.items():
+            if isinstance(ch, dict):
+                btn_title = ch.get("title", "🔗 Join Channel")
+                btn_url = ch.get("url", "https://t.me/tbpycofficial")
+                markup.add(types.InlineKeyboardButton(btn_title, url=btn_url))
         
     markup.add(types.InlineKeyboardButton("✅ Verify Membership", callback_data="verify_membership"))
     return markup
 
-# --- 🚀 START COMMAND (স্ক্রিনশটের ডিজাইন) ---
+# --- 🚀 START COMMAND ---
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = str(message.chat.id)
@@ -180,8 +208,7 @@ def start(message):
 
 ✅ <b>After joining all channels, tap the Verify Membership button.</b>"""
 
-    # স্ক্রিনশটের JOIN US ব্যানার ইমেজ
-    img_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800" # অথবা আপনার নিজস্ব GIF/ইমেজ লিংক
+    img_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800"
 
     try:
         bot.send_photo(
@@ -190,7 +217,7 @@ def start(message):
             caption=welcome_text,
             reply_markup=join_keyboard()
         )
-    except:
+    except Exception:
         bot.send_message(
             user_id,
             welcome_text,
@@ -204,7 +231,6 @@ def verify_callback(call):
     if is_joined(user_id):
         user_data = get_user(user_id)
         
-        # রেফার বোনাস প্রদান
         referrer_id = user_data.get("referred_by")
         if referrer_id and not user_data.get("bonus_claimed"):
             ref_data = get_user(referrer_id)
@@ -419,7 +445,7 @@ def handle_withdraw_admin(call):
         except:
             pass
 
-# --- 👑 ADMIN DYNAMIC CHANNEL MANAGEMENT COMMANDS ---
+# --- 👑 ADMIN DYNAMIC CHANNELS ---
 @bot.message_handler(commands=['channels'])
 def admin_list_channels(message):
     if str(message.chat.id) != ADMIN_ID:
@@ -431,7 +457,8 @@ def admin_list_channels(message):
     
     text = "📢 <b>বর্তমান চ্যানেল তালিকা:</b>\n\n"
     for k, v in channels.items():
-        text += f"🔹 <b>Title:</b> {v.get('title')}\n   <b>ID:</b> <code>{v.get('channel_id')}</code>\n   <b>Link:</b> {v.get('url')}\n\n"
+        if isinstance(v, dict):
+            text += f"🔹 <b>Title:</b> {v.get('title')}\n   <b>ID:</b> <code>{v.get('channel_id')}</code>\n   <b>Link:</b> {v.get('url')}\n\n"
     bot.send_message(ADMIN_ID, text)
 
 @bot.message_handler(commands=['addchannel'])
@@ -447,7 +474,7 @@ def admin_add_channel(message):
         save_channel_to_db(ch_id, ch_url, ch_title)
         bot.send_message(ADMIN_ID, f"✅ চ্যানেল সফলভাবে যুক্ত হয়েছে!\n\n🔹 Title: {ch_title}\n🔹 ID: <code>{ch_id}</code>\n🔹 Link: {ch_url}")
     except:
-        bot.send_message(ADMIN_ID, "⚠️ <b>ব্যবহার করার নিয়ম:</b>\n<code>/addchannel @channel_username https://t.me/link বাটনের_নাম</code>")
+        bot.send_message(ADMIN_ID, "⚠️ <b>ব্যবহার:</b>\n<code>/addchannel @channel_username https://t.me/link বাটনের_নাম</code>")
 
 @bot.message_handler(commands=['delchannel'])
 def admin_del_channel(message):
@@ -456,9 +483,9 @@ def admin_del_channel(message):
     try:
         ch_id = message.text.split()[1]
         remove_channel_from_db(ch_id)
-        bot.send_message(ADMIN_ID, f"🗑️ চ্যানেল <code>{ch_id}</code> ডাটাবেজ থেকে ডিলিট করা হয়েছে।")
+        bot.send_message(ADMIN_ID, f"🗑️ চ্যানেল <code>{ch_id}</code> ডিলিট করা হয়েছে।")
     except:
-        bot.send_message(ADMIN_ID, "⚠️ <b>ব্যবহার করার নিয়ম:</b>\n<code>/delchannel @channel_username</code>")
+        bot.send_message(ADMIN_ID, "⚠️ <b>ব্যবহার:</b>\n<code>/delchannel @channel_username</code>")
 
 # --- 👑 OTHER ADMIN COMMANDS ---
 @bot.message_handler(commands=['admin'])
@@ -468,16 +495,16 @@ def admin_help(message):
     msg = """👑 <b>Admin Control Panel:</b>
 
 📢 <b>চ্যানেল ম্যানেজমেন্ট:</b>
-🔹 <code>/addchannel &lt;id&gt; &lt;link&gt; &lt;title&gt;</code> - নতুন চ্যানেল যোগ করুন
-🔹 <code>/delchannel &lt;id&gt;</code> - চ্যানেল ডিলিট করুন
-🔹 <code>/channels</code> - সকল চ্যানেলের লিস্ট দেখুন
+🔹 <code>/addchannel &lt;id&gt; &lt;link&gt; &lt;title&gt;</code> - নতুন চ্যানেল যোগ
+🔹 <code>/delchannel &lt;id&gt;</code> - চ্যানেল ডিলিট
+🔹 <code>/channels</code> - চ্যানেল লিস্ট
 
 👤 <b>ইউজার কন্ট্রোল:</b>
 🔹 <code>/user &lt;id&gt;</code> - ইউজারের ডাটা দেখুন
 🔹 <code>/addbal &lt;id&gt; &lt;amount&gt;</code> - ব্যালেন্স দিন
 🔹 <code>/cutbal &lt;id&gt; &lt;amount&gt;</code> - ব্যালেন্স কাটুন
 🔹 <code>/deluser &lt;id&gt;</code> - ইউজার ডিলিট করুন
-🔹 <code>/bcast</code> - সকল ইউজারকে ব্রডকাস্ট করুন"""
+🔹 <code>/bcast</code> - মেসেজ ব্রডকাস্ট করুন"""
     bot.send_message(ADMIN_ID, msg)
 
 @bot.message_handler(commands=['user'])
