@@ -15,7 +15,7 @@ DEFAULT_CHANNEL_URL = "https://t.me/FHx_Technical_Creator"
 # Firebase Realtime Database URL
 FIREBASE_URL = "https://tournament-ace22-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# ⚡ মাল্টি-থ্রেডেড টেলিগ্রাম ইঞ্জিন
+# ⚡ সুপারফাস্ট মাল্টি-থ্রেডেড টেলিগ্রাম ইঞ্জিন
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=True, num_threads=30)
 
 # ⚡ HTTP Connection Pooling
@@ -24,7 +24,7 @@ adapter = requests.adapters.HTTPAdapter(pool_connections=30, pool_maxsize=30)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
 
-# --- ⚡ IN-MEMORY CACHE ---
+# --- ⚡ IN-MEMORY TURBO CACHE ---
 CACHE = {
     "settings": {
         "lang": "bn",
@@ -57,11 +57,11 @@ def run_flask():
 # --- 🗄️ FIREBASE DATABASE FUNCTIONS ---
 def load_initial_cache():
     try:
-        res = session.get(f"{FIREBASE_URL}/settings.json", timeout=4)
+        res = session.get(f"{FIREBASE_URL}/settings.json", timeout=3)
         if res.status_code == 200 and res.json() and isinstance(res.json(), dict):
             CACHE["settings"].update(res.json())
         
-        res2 = session.get(f"{FIREBASE_URL}/channels.json", timeout=4)
+        res2 = session.get(f"{FIREBASE_URL}/channels.json", timeout=3)
         if res2.status_code == 200 and res2.json():
             data = res2.json()
             if isinstance(data, dict):
@@ -82,7 +82,7 @@ def update_settings(data):
 
 def get_user(user_id):
     try:
-        res = session.get(f"{FIREBASE_URL}/users/{user_id}.json", timeout=3)
+        res = session.get(f"{FIREBASE_URL}/users/{user_id}.json", timeout=2)
         data = res.json()
         return data if isinstance(data, dict) else {}
     except:
@@ -91,9 +91,16 @@ def get_user(user_id):
 def update_user(user_id, data):
     threading.Thread(target=lambda: session.patch(f"{FIREBASE_URL}/users/{user_id}.json", json=data, timeout=5)).start()
 
+def delete_user_from_db(user_id):
+    try:
+        session.delete(f"{FIREBASE_URL}/users/{user_id}.json", timeout=3)
+        return True
+    except:
+        return False
+
 def get_all_users():
     try:
-        res = session.get(f"{FIREBASE_URL}/users.json", timeout=4)
+        res = session.get(f"{FIREBASE_URL}/users.json", timeout=3)
         data = res.json()
         if isinstance(data, dict):
             return data
@@ -113,7 +120,7 @@ def get_withdrawal(w_id):
     except:
         return None
 
-# --- 📢 CHANNELS MANAGEMENT ---
+# --- 📢 DYNAMIC CHANNELS ---
 def get_channels():
     if not CACHE["channels"]:
         return {"default": {"channel_id": DEFAULT_CHANNEL_ID, "url": DEFAULT_CHANNEL_URL, "title": "🔗 Join Channel 1"}}
@@ -133,50 +140,37 @@ def remove_channel_from_db(ch_id):
     threading.Thread(target=lambda: session.delete(f"{FIREBASE_URL}/channels/{clean_key}.json", timeout=5)).start()
     return True
 
-# --- 🔍 ১০০% এরর-প্রুফ MEMBERSHIP CHECK ---
+# --- 🔍 STRICT MEMBERSHIP CHECK ---
 def is_joined(user_id):
     channels = get_channels()
     if not channels:
         channels = {"default": {"channel_id": DEFAULT_CHANNEL_ID}}
 
     for key, ch in channels.items():
-        if isinstance(ch, dict):
-            ch_id = ch.get("channel_id", "")
-        else:
-            ch_id = str(ch)
-
+        ch_id = ch.get("channel_id") if isinstance(ch, dict) else ch
         if not ch_id or not isinstance(ch_id, str):
             continue
-
-        ch_id = ch_id.strip()
-
         try:
-            member = bot.get_chat_member(ch_id, int(user_id))
-            if member.status in ['creator', 'administrator', 'member', 'restricted']:
-                continue
-            else:
-                print(f"❌ User {user_id} is not a member of {ch_id} (Status: {member.status})")
+            member = bot.get_chat_member(ch_id, user_id)
+            if member.status not in ['member', 'administrator', 'creator']:
                 return False
-        except Exception as e:
-            print(f"⚠️ [Verification Error] Channel: {ch_id} | User: {user_id} | Reason: {e}")
+        except Exception:
             return False
-            
     return True
 
-# --- 🌐 TEXTS ---
+# --- 🌐 LANGUAGE & TEXTS ---
 TEXTS = {
     "bn": {
         "access_title": "🔒 <b>Access Restricted</b>\n━━━━━━━━━━━━━━━━━━━━━\n⚠️ <b>You must join all our channels to unlock bot features.</b>\n\n📢 <b>Subscribe to every channel using the buttons below.</b>\n\n✅ <b>After joining all channels, tap the Verify Membership button.</b>",
         "verify_btn": "✅ Verify Membership",
         "verify_success": "🎉 <b>Membership Verified! Welcome to the main menu.</b>",
-        "verify_fail": "❌ আপনি এখনো চ্যানেলে জয়েন করেননি! সব চ্যানেলে জয়েন করে আবার চেষ্টা করুন।",
-        "btn_bal": "🖥️ একাউন্ট",
-        "btn_ref": "⚡ রেফারেল",
-        "btn_with": "💲 উইথড্র",
-        "btn_wall": "💳 ওয়ালেট",
-        "btn_bonus": "🎁 বোনাস",
-        "btn_stat": "📊 স্ট্যাটাস",
-        "btn_supp": "SUPPORT 💸",
+        "verify_fail": "❌ আপনি এখনো চ্যানেলে জয়েন করেননি! আগে জয়েন করুন।",
+        "btn_bal": "💰 BALANCE",
+        "btn_ref": "🧑‍🤝‍🧑 REFERRAL",
+        "btn_with": "📥 WITHDRAW",
+        "btn_wall": "💳 WALLET",
+        "btn_bonus": "🎁 BONUS",
+        "btn_stat": "🔋 STATISTICS",
         "set_wallet_prompt": "📝 <b>অনুগ্রহ করে আপনার বিকাশ/নগদ নম্বর লিখুন:</b>",
         "wallet_saved": "✅ <b>আপনার ওয়ালেট সফলভাবে সেট হয়েছে:</b>",
         "min_with_err": "❌ সর্বনিম্ন উইথড্র পরিমাণ {min_w} {curr}।",
@@ -194,7 +188,6 @@ TEXTS = {
         "btn_wall": "💳 WALLET",
         "btn_bonus": "🎁 BONUS",
         "btn_stat": "🔋 STATISTICS",
-        "btn_supp": "SUPPORT 💸",
         "set_wallet_prompt": "📝 <b>Please Enter Your Bkash/Nagad Number:</b>",
         "wallet_saved": "✅ <b>Wallet successfully updated to:</b>",
         "min_with_err": "❌ Minimum withdrawal amount is {min_w} {curr}.",
@@ -211,11 +204,11 @@ def get_t(key):
 def main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(get_t("btn_bal"), get_t("btn_ref"))
-    markup.add(get_t("btn_wall"), get_t("btn_with"))
-    markup.add(get_t("btn_supp"), get_t("btn_stat"))
-    markup.add(get_t("btn_bonus"))
+    markup.add(get_t("btn_with"), get_t("btn_wall"))
+    markup.add(get_t("btn_bonus"), get_t("btn_stat"))
     return markup
 
+# ⚡ ১০০% ক্র্যাশ-প্রুফ ইনলাইন কিবোর্ড
 def join_keyboard():
     markup = types.InlineKeyboardMarkup()
     channels = get_channels()
@@ -226,7 +219,7 @@ def join_keyboard():
             if isinstance(ch, dict) and "url" in ch and isinstance(ch["url"], str):
                 url = ch["url"].strip()
                 if url.startswith("http://") or url.startswith("https://") or url.startswith("tg://"):
-                    btn_title = ch.get("title", "🔗 Join Channel")
+                    btn_title = ch.get("title", "🔗 Join Channel 1")
                     markup.add(types.InlineKeyboardButton(btn_title, url=url))
                     has_btn = True
         
@@ -237,7 +230,7 @@ def join_keyboard():
     markup.add(types.InlineKeyboardButton(verify_text, callback_data="verify_membership"))
     return markup
 
-# --- 🚀 START COMMAND ---
+# --- 🚀 100% WORKING CRASH-PROOF START COMMAND ---
 @bot.message_handler(commands=['start'])
 def start(message):
     try:
@@ -274,8 +267,9 @@ def start(message):
                 new_data["referred_by"] = text_split[1]
             update_user(user_id, new_data)
 
+        # ইউজার যদি অলরেডি চ্যানেলে জয়েন থাকে, তবে সরাসরি মেইন মেনু ওপেন হবে
         if is_joined(user_id):
-            bot.send_message(user_id, "🎉 <b>স্বাগতম! নিচের মেনু থেকে অপশন সিলেক্ট করুন:</b>", reply_markup=main_menu())
+            bot.send_message(user_id, "🎉 <b>Welcome back! Explore the menu below:</b>", reply_markup=main_menu())
             return
 
         welcome_text = get_t("access_title")
@@ -294,7 +288,7 @@ def start(message):
 
     except Exception as e:
         print(f"Start command error: {e}")
-        bot.send_message(message.chat.id, "🎉 <b>Welcome!</b>", reply_markup=main_menu())
+        bot.send_message(message.chat.id, "🎉 <b>Welcome! Tap below to start:</b>", reply_markup=main_menu())
 
 # --- 🔍 VERIFY CALLBACK ---
 @bot.callback_query_handler(func=lambda call: call.data == "verify_membership")
@@ -327,8 +321,8 @@ def verify_callback(call):
     else:
         bot.answer_callback_query(call.id, get_t("verify_fail"), show_alert=True)
 
-# --- 💰 BALANCE / ACCOUNT ---
-@bot.message_handler(func=lambda m: m.text in ["💰 BALANCE", "🖥️ একাউন্ট", "🖥️ Account", "/balance"])
+# --- 💰 BALANCE ---
+@bot.message_handler(func=lambda m: m.text in ["💰 BALANCE", "🖥️ একাউন্ট", "🖥️ Account"])
 def account(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
@@ -348,7 +342,7 @@ def account(message):
     bot.send_message(user_id, msg)
 
 # --- 🧑‍🤝‍🧑 REFERRAL ---
-@bot.message_handler(func=lambda m: m.text in ["🧑‍🤝‍🧑 REFERRAL", "⚡ রেফারেল", "⚡ Referral", "/referral"])
+@bot.message_handler(func=lambda m: m.text in ["🧑‍🤝‍🧑 REFERRAL", "⚡ রেফারেল", "⚡ Referral"])
 def referral(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
@@ -376,7 +370,7 @@ def referral(message):
     bot.send_message(user_id, msg, reply_markup=markup)
 
 # --- 🎁 DAILY BONUS ---
-@bot.message_handler(func=lambda m: m.text in ["🎁 BONUS", "🎁 বোনাস", "🎁 Bonus", "/bonus"])
+@bot.message_handler(func=lambda m: m.text in ["🎁 BONUS", "🎁 Bonus"])
 def daily_bonus_handler(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
@@ -416,8 +410,8 @@ def daily_bonus_handler(message):
 👉 <b>{hours} ঘণ্টা {minutes} মিনিট পর</b> আবার আসুন!"""
         bot.send_message(user_id, msg)
 
-# --- 📊 STATISTICS ---
-@bot.message_handler(func=lambda m: m.text in ["🔋 STATISTICS", "📊 স্ট্যাটাস", "📊 Status", "/stats"])
+# --- 🔋 STATISTICS ---
+@bot.message_handler(func=lambda m: m.text in ["🔋 STATISTICS", "📊 স্ট্যাটাস", "📊 Status"])
 def statistics_handler(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
@@ -427,6 +421,7 @@ def statistics_handler(message):
     users_data = get_all_users()
     total_users = len(users_data) if users_data else 1
     total_withdrawn = float(settings.get("total_withdrawn", 0.0))
+
     user_balance = float(user_data.get("balance", 0.0))
 
     msg = f"""🌐 <b>GLOBAL SYSTEM STATISTICS</b>
@@ -437,14 +432,14 @@ def statistics_handler(message):
 
 👤 <b>PERSONAL PROFILE</b>
 🔷 <b>Account ID :</b> <code>{user_id}</code>
-🔷 <b>Membership :</b> ✅ Verified
+🔷 <b>Membership :</b> ✅ Success
 🔷 <b>Total Earnings :</b> {user_balance:.2f} {currency}
 
 ⭐ <i>Keep inviting friends to unlock more rewards!</i>"""
     bot.send_message(user_id, msg)
 
 # --- 💳 WALLET ---
-@bot.message_handler(func=lambda m: m.text in ["💳 WALLET", "💳 ওয়ালেট", "💳 Wallet", "/wallet"])
+@bot.message_handler(func=lambda m: m.text in ["💳 WALLET", "💳 ওয়ালেট", "💳 Wallet"])
 def wallet_handler(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
@@ -470,7 +465,7 @@ def save_wallet(message):
     bot.send_message(user_id, f"{get_t('wallet_saved')} <code>{wallet_number}</code>", reply_markup=main_menu())
 
 # --- 📥 WITHDRAW ---
-@bot.message_handler(func=lambda m: m.text in ["📥 WITHDRAW", "💲 উইথড্র", "💲 Withdrawal", "/withdraw"])
+@bot.message_handler(func=lambda m: m.text in ["📥 WITHDRAW", "💲 উইথড্র", "💲 Withdrawal"])
 def withdraw_prompt(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
@@ -564,6 +559,7 @@ def handle_withdraw_admin(call):
 
     if action == "appr":
         save_withdrawal(w_id, {**w_data, "status": "Approved"})
+        
         current_total = float(CACHE["settings"].get("total_withdrawn", 0.0))
         update_settings({"total_withdrawn": current_total + amount})
 
@@ -585,33 +581,60 @@ def handle_withdraw_admin(call):
         except:
             pass
 
-# --- 👑 ADMIN PANEL & HELPERS (মোট চ্যানেল সংখ্যা সহ) ---
+# --- 👑 INTERACTIVE ADMIN CONTROL PANEL ---
 def build_admin_keyboard():
     settings = get_settings()
-    channels = get_channels()
-    total_ch = len(channels)
-    
     markup = types.InlineKeyboardMarkup(row_width=2)
 
+    sys_status = "✅ ON"
     maint_status = "✅ ON" if settings.get("maintenance") else "❌ OFF"
     wd_status = "✅ ON" if settings.get("withdraw_status", True) else "❌ OFF"
+
     currency = settings.get("currency", "bKash")
+    min_w = settings.get("min_withdraw", 15.0)
+    max_w = settings.get("max_withdraw", 100.0)
+    refer_b = settings.get("refer_bonus", 2.0)
+    daily_b = settings.get("daily_bonus", 0.1)
 
     markup.add(
-        types.InlineKeyboardButton(f"🛠️ Maint: {maint_status}", callback_data="adm_toggle_maint"),
-        types.InlineKeyboardButton(f"🌐 Withdraw: {wd_status}", callback_data="adm_toggle_wd")
+        types.InlineKeyboardButton(f"🤖 System: {sys_status}", callback_data="adm_noop"),
+        types.InlineKeyboardButton(f"🛠️ Maint: {maint_status}", callback_data="adm_toggle_maint")
     )
     markup.add(
-        types.InlineKeyboardButton(f"💱 Currency: {currency}", callback_data="adm_set_curr"),
-        types.InlineKeyboardButton(f"📢 Total Channels ({total_ch})", callback_data="adm_show_channels")
+        types.InlineKeyboardButton(f"🌐 Withdrawals: {wd_status}", callback_data="adm_toggle_wd"),
+        types.InlineKeyboardButton(f"💱 Currency: {currency}", callback_data="adm_set_curr")
     )
     markup.add(
-        types.InlineKeyboardButton("➕ Add Channel", callback_data="adm_prompt_addch"),
-        types.InlineKeyboardButton("➖ Rem Channel", callback_data="adm_prompt_remch")
+        types.InlineKeyboardButton(f"🔻 Min Withdraw(~ {min_w})", callback_data="adm_set_minw"),
+        types.InlineKeyboardButton(f"🔺 Max Withdraw(~ {max_w})", callback_data="adm_set_maxw")
+    )
+    markup.add(
+        types.InlineKeyboardButton(f"👥 Per Refer (~ {refer_b})", callback_data="adm_set_refb"),
+        types.InlineKeyboardButton(f"🎁 Daily Bonus (~ {daily_b})", callback_data="adm_set_dailyb")
+    )
+    markup.add(
+        types.InlineKeyboardButton("➕ Add Funds", callback_data="adm_prompt_addfunds"),
+        types.InlineKeyboardButton("➖ Deduct Funds", callback_data="adm_prompt_cutfunds")
+    )
+    markup.add(
+        types.InlineKeyboardButton("➕ Add Pub. Ch.", callback_data="adm_prompt_addch"),
+        types.InlineKeyboardButton("➖ Rem Pub. Ch.", callback_data="adm_prompt_remch")
+    )
+    markup.add(
+        types.InlineKeyboardButton("🖼️ Set Banner", callback_data="adm_prompt_setphoto"),
+        types.InlineKeyboardButton("☎️ Set Support", callback_data="adm_prompt_setsupport")
+    )
+    markup.add(
+        types.InlineKeyboardButton("🌐 Lang (BN/EN)", callback_data="adm_prompt_setlang"),
+        types.InlineKeyboardButton("📢 Broadcast", callback_data="adm_prompt_bcast")
     )
     markup.add(
         types.InlineKeyboardButton("👥 All Users", callback_data="adm_show_allusers"),
-        types.InlineKeyboardButton("📢 Broadcast", callback_data="adm_prompt_bcast")
+        types.InlineKeyboardButton("👤 User Info", callback_data="adm_prompt_userinfo")
+    )
+    markup.add(
+        types.InlineKeyboardButton("⛏️ Ban User", callback_data="adm_prompt_ban"),
+        types.InlineKeyboardButton("♻️ Unban User", callback_data="adm_prompt_unban")
     )
     return markup
 
@@ -619,15 +642,13 @@ def build_admin_keyboard():
 def admin_panel_handler(message):
     if str(message.chat.id) != ADMIN_ID:
         return
-    channels = get_channels()
-    total_ch = len(channels)
-    
     bot.send_message(
         ADMIN_ID,
-        f"👑 <b>INTERACTIVE ADMIN CONTROL PANEL</b>\n━━━━━━━━━━━━━━━━━━━━━\n📢 <b>বর্তমান মোট চ্যানেল:</b> {total_ch} টি\n\nনিচের অপশনগুলো ব্যবহার করে কনফিগার করুন:",
+        "👑 <b>INTERACTIVE ADMIN CONTROL PANEL</b>\n━━━━━━━━━━━━━━━━━━━━━\nবাটন বা কমান্ড ব্যবহার করে মান পরিবর্তন করুন:",
         reply_markup=build_admin_keyboard()
     )
 
+# --- 👑 ADMIN INLINE PROMPTS ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("adm_"))
 def admin_callbacks(call):
     if str(call.from_user.id) != ADMIN_ID:
@@ -641,57 +662,127 @@ def admin_callbacks(call):
         new_val = not settings.get("maintenance", False)
         update_settings({"maintenance": new_val})
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=build_admin_keyboard())
+        bot.answer_callback_query(call.id, f"Maintenance: {'ON' if new_val else 'OFF'}")
+
     elif data == "adm_toggle_wd":
         new_val = not settings.get("withdraw_status", True)
         update_settings({"withdraw_status": new_val})
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=build_admin_keyboard())
-    elif data == "adm_show_channels":
-        admin_list_channels_func()
-    elif data == "adm_show_allusers":
-        admin_all_users_func()
+        bot.answer_callback_query(call.id, f"Withdrawals: {'ON' if new_val else 'OFF'}")
+
+    elif data == "adm_set_curr":
+        msg = bot.send_message(ADMIN_ID, "💱 <b>কারেন্সি নাম লিখুন:</b>\nযেমন: <code>bKash</code>, <code>টাকা</code>, <code>BDT</code>\n\n👉 <i>বা কমান্ড দিন:</i> <code>/setcurrency bKash</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"currency": m.text.strip()}), bot.send_message(ADMIN_ID, f"✅ কারেন্সি: <b>{m.text.strip()}</b>", reply_markup=build_admin_keyboard())])
+
+    elif data == "adm_set_minw":
+        msg = bot.send_message(ADMIN_ID, "🔻 <b>সর্বনিম্ন উইথড্র অ্যামাউন্ট লিখুন:</b>\nযেমন: <code>15</code> বা কমান্ড: <code>/setminwith 15</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"min_withdraw": float(m.text.strip())}), bot.send_message(ADMIN_ID, f"✅ Min Withdraw: <b>{m.text.strip()}</b>", reply_markup=build_admin_keyboard())])
+
+    elif data == "adm_set_maxw":
+        msg = bot.send_message(ADMIN_ID, "🔺 <b>সর্বোচ্চ উইথড্র অ্যামাউন্ট লিখুন:</b>\nযেমন: <code>100</code> বা কমান্ড: <code>/setmaxwith 100</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"max_withdraw": float(m.text.strip())}), bot.send_message(ADMIN_ID, f"✅ Max Withdraw: <b>{m.text.strip()}</b>", reply_markup=build_admin_keyboard())])
+
+    elif data == "adm_set_refb":
+        msg = bot.send_message(ADMIN_ID, "👥 <b>প্রতি রেফারের টাকা লিখুন:</b>\nযেমন: <code>2</code> বা কমান্ড: <code>/setrefer 2</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"refer_bonus": float(m.text.strip())}), bot.send_message(ADMIN_ID, f"✅ Per Refer: <b>{m.text.strip()}</b>", reply_markup=build_admin_keyboard())])
+
+    elif data == "adm_set_dailyb":
+        msg = bot.send_message(ADMIN_ID, "🎁 <b>ডেইলি বোনাস পরিমাণ লিখুন:</b>\nযেমন: <code>0.1</code> বা কমান্ড: <code>/setbonus 0.1</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"daily_bonus": float(m.text.strip())}), bot.send_message(ADMIN_ID, f"✅ Daily Bonus: <b>{m.text.strip()}</b>", reply_markup=build_admin_keyboard())])
+
+    elif data == "adm_prompt_addfunds":
+        msg = bot.send_message(ADMIN_ID, "➕ <b>ফরম্যাট:</b> <code>User_ID Amount</code>\nযেমন: <code>5889152252 50</code> বা কমান্ড: <code>/addbal 5889152252 50</code>")
+        bot.register_next_step_handler(msg, admin_do_add_funds)
+
+    elif data == "adm_prompt_cutfunds":
+        msg = bot.send_message(ADMIN_ID, "➖ <b>ফরম্যাট:</b> <code>User_ID Amount</code>\nযেমন: <code>5889152252 20</code> বা কমান্ড: <code>/cutbal 5889152252 20</code>")
+        bot.register_next_step_handler(msg, admin_do_cut_funds)
+
     elif data == "adm_prompt_addch":
-        msg = bot.send_message(ADMIN_ID, "➕ ফরম্যাট: <code>@username https://t.me/link বাটনের_নাম</code>\nযেমন: <code>@FHx_Technical_Creator https://t.me/FHx_Technical_Creator Join Channel 1</code>")
+        msg = bot.send_message(ADMIN_ID, "➕ <b>ফরম্যাট:</b> <code>@username https://t.me/link বাটনের_নাম</code>\nযেমন: <code>@FHx_Technical_Creator https://t.me/FHx_Technical_Creator 🔗 Join Channel 1</code>")
         bot.register_next_step_handler(msg, admin_do_add_channel)
+
     elif data == "adm_prompt_remch":
-        msg = bot.send_message(ADMIN_ID, "➖ মুছে ফেলার জন্য চ্যানেলের ইউজারনেম দিন (যেমন: <code>@FHx_Technical_Creator</code>):")
+        msg = bot.send_message(ADMIN_ID, "➖ <b>চ্যানেল ইউজারনেম লিখুন:</b>\nযেমন: <code>@FHx_Technical_Creator</code> বা কমান্ড: <code>/delchannel @FHx_Technical_Creator</code>")
         bot.register_next_step_handler(msg, admin_do_rem_channel)
+
+    elif data == "adm_prompt_setphoto":
+        msg = bot.send_message(ADMIN_ID, "🖼️ <b>ছবির ডাইরেক্ট লিংক পেস্ট করুন:</b>\nযেমন: <code>https://example.com/photo.jpg</code> বা কমান্ড: <code>/setphoto লিংক</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"photo": m.text.strip()}), bot.send_message(ADMIN_ID, "✅ ব্যানার ফটো আপডেট হয়েছে!", reply_markup=build_admin_keyboard())])
+
+    elif data == "adm_prompt_setsupport":
+        msg = bot.send_message(ADMIN_ID, "☎️ <b>নতুন সাপোর্ট মেসেজ লিখে পাঠান:</b>\nযেমন: <code>/setsupport আপনার_মেসেজ</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"support": m.text.strip()}), bot.send_message(ADMIN_ID, "✅ সাপোর্ট মেসেজ আপডেট হয়েছে!", reply_markup=build_admin_keyboard())])
+
+    elif data == "adm_prompt_setlang":
+        msg = bot.send_message(ADMIN_ID, "🌐 <b>ভাষা পরিবর্তন:</b>\nবাংলায়: <code>bn</code>\nEnglish: <code>en</code>\n\n👉 <i>বা কমান্ড:</i> <code>/setlang bn</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_settings({"lang": m.text.strip().lower()}), bot.send_message(ADMIN_ID, f"✅ ভাষা পরিবর্তন হয়েছে: {m.text.strip().upper()}", reply_markup=build_admin_keyboard())])
+
     elif data == "adm_prompt_bcast":
-        msg = bot.send_message(ADMIN_ID, "📢 যে মেসেজটি সবাইকে পাঠাতে চান তা পাঠান:")
+        msg = bot.send_message(ADMIN_ID, "📢 <b>সকলকে ব্রডকাস্ট করার মেসেজটি পাঠান:</b>\nবা কমান্ড দিন: <code>/bcast</code>")
         bot.register_next_step_handler(msg, send_broadcast)
 
-def admin_list_channels_func():
-    channels = get_channels()
-    total_ch = len(channels)
-    text = f"📢 <b>বর্তমান চ্যানেল তালিকা (মোট: {total_ch} টি):</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-    i = 1
-    for k, v in channels.items():
-        if isinstance(v, dict):
-            text += f"{i}. 🔹 <b>Title:</b> {v.get('title')}\n   🆔 <b>ID:</b> <code>{v.get('channel_id')}</code>\n   🔗 <b>Link:</b> {v.get('url')}\n\n"
-            i += 1
-    bot.send_message(ADMIN_ID, text)
+    elif data == "adm_show_allusers":
+        admin_all_users_func()
+
+    elif data == "adm_prompt_userinfo":
+        msg = bot.send_message(ADMIN_ID, "👤 <b>User ID লিখুন:</b>\nযেমন: <code>5889152252</code> বা কমান্ড: <code>/user 5889152252</code>")
+        bot.register_next_step_handler(msg, lambda m: admin_view_user_cmd(m, direct_id=m.text.strip()))
+
+    elif data == "adm_prompt_ban":
+        msg = bot.send_message(ADMIN_ID, "⛏️ <b>যাকে ব্যান করবেন তার User ID লিখুন:</b>\nযেমন: <code>5889152252</code> বা কমান্ড: <code>/ban 5889152252</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_user(m.text.strip(), {"status": "banned"}), bot.send_message(ADMIN_ID, f"🚫 User {m.text.strip()} Banned!")])
+
+    elif data == "adm_prompt_unban":
+        msg = bot.send_message(ADMIN_ID, "♻️ <b>যাকে আনব্যান করবেন তার User ID লিখুন:</b>\nযেমন: <code>5889152252</code> বা কমান্ড: <code>/unban 5889152252</code>")
+        bot.register_next_step_handler(msg, lambda m: [update_user(m.text.strip(), {"status": "active"}), bot.send_message(ADMIN_ID, f"✅ User {m.text.strip()} Unbanned!")])
+
+def admin_do_add_funds(message):
+    try:
+        uid, amt = message.text.split()
+        amt = float(amt)
+        u = get_user(uid)
+        new_bal = float(u.get("balance", 0)) + amt
+        currency = CACHE["settings"].get("currency", "bKash")
+        update_user(uid, {"balance": new_bal})
+        bot.send_message(ADMIN_ID, f"✅ User {uid} কে {amt} {currency} দেওয়া হয়েছে। New Balance: {new_bal:.2f}")
+        try:
+            bot.send_message(uid, f"🎁 <b>Admin has added {amt} {currency} to your balance!</b>")
+        except:
+            pass
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ভুল ফরম্যাট! উদাহরণ: <code>5889152252 50</code>")
+
+def admin_do_cut_funds(message):
+    try:
+        uid, amt = message.text.split()
+        amt = float(amt)
+        u = get_user(uid)
+        new_bal = max(0.0, float(u.get("balance", 0)) - amt)
+        currency = CACHE["settings"].get("currency", "bKash")
+        update_user(uid, {"balance": new_bal})
+        bot.send_message(ADMIN_ID, f"✅ User {uid} থেকে {amt} {currency} কাটা হয়েছে। New Balance: {new_bal:.2f}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ভুল ফরম্যাট! উদাহরণ: <code>5889152252 20</code>")
 
 def admin_do_add_channel(message):
     try:
-        raw_text = message.text.replace("/addchannel", "").strip()
-        parts = raw_text.split(maxsplit=2)
+        parts = message.text.split(maxsplit=3)
         ch_id = parts[0]
         ch_url = parts[1]
         ch_title = parts[2] if len(parts) > 2 else "🔗 Join Channel"
         save_channel_to_db(ch_id, ch_url, ch_title)
-        
-        total_ch = len(get_channels())
-        bot.send_message(ADMIN_ID, f"✅ চ্যানেল যুক্ত হয়েছে!\n🔹 ID: {ch_id}\n🔹 Title: {ch_title}\n\n📢 <b>বর্তমান মোট চ্যানেল:</b> {total_ch} টি\n⚠️ <i>বটকে ওই চ্যানেলে Admin বানিয়ে রাখুন।</i>")
-    except Exception as e:
-        bot.send_message(ADMIN_ID, f"⚠️ ভুল ফরম্যাট! Error: {e}")
+        bot.send_message(ADMIN_ID, f"✅ চ্যানেল যুক্ত হয়েছে:\n🔹 Title: {ch_title}\n🔹 ID: {ch_id}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ভুল ফরম্যাট! উদাহরণ:\n<code>@FHx_Technical_Creator https://t.me/FHx_Technical_Creator 🔗 Join Channel 1</code>")
 
 def admin_do_rem_channel(message):
     try:
-        ch_id = message.text.replace("/delchannel", "").strip()
+        ch_id = message.text.strip()
         remove_channel_from_db(ch_id)
-        total_ch = len(get_channels())
-        bot.send_message(ADMIN_ID, f"🗑️ চ্যানেল মুছে ফেলা হয়েছে: {ch_id}\n📢 <b>বর্তমান মোট চ্যানেল:</b> {total_ch} টি")
-    except Exception as e:
-        bot.send_message(ADMIN_ID, f"⚠️ সমস্যা হয়েছে: {e}")
+        bot.send_message(ADMIN_ID, f"🗑️ চ্যানেল মুছে ফেলা হয়েছে: {ch_id}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ভুল ফরম্যাট!")
 
 def admin_all_users_func():
     users = get_all_users()
@@ -700,25 +791,188 @@ def admin_all_users_func():
         return
     currency = CACHE["settings"].get("currency", "bKash")
     report = f"👥 <b>সকল ইউজার তালিকা (মোট: {len(users)}):</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
-    for uid, u in list(users.items())[:40]:
+    for uid, u in list(users.items())[:50]:
         if isinstance(u, dict):
-            report += f"🆔 <code>{uid}</code> | {u.get('name','N/A')} | 💰 {float(u.get('balance',0)):.2f} {currency}\n"
+            report += f"🆔 <code>{uid}</code> | {u.get('name','N/A')} | 💰 {float(u.get('balance',0)):.2f} {currency} | 👥 {u.get('ref_count',0)}\n"
     bot.send_message(ADMIN_ID, report)
 
+# --- 👑 ALL DIRECT TEXT COMMANDS ---
+@bot.message_handler(commands=['setcurrency'])
+def admin_set_currency_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        curr = message.text.split(maxsplit=1)[1]
+        update_settings({"currency": curr})
+        bot.send_message(ADMIN_ID, f"✅ কারেন্সি সফলভাবে <b>{curr}</b> সেট হয়েছে!")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setcurrency bKash</code> বা <code>/setcurrency টাকা</code>")
+
+@bot.message_handler(commands=['setrefer'])
+def admin_set_refer_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        amt = float(message.text.split()[1])
+        update_settings({"refer_bonus": amt})
+        bot.send_message(ADMIN_ID, f"✅ প্রতি রেফার বোনাস: {amt}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setrefer 2</code>")
+
+@bot.message_handler(commands=['setminwith'])
+def admin_set_min_with_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        amt = float(message.text.split()[1])
+        update_settings({"min_withdraw": amt})
+        bot.send_message(ADMIN_ID, f"✅ সর্বনিম্ন উইথড্র লিমিট: {amt}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setminwith 15</code>")
+
+@bot.message_handler(commands=['setmaxwith'])
+def admin_set_max_with_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        amt = float(message.text.split()[1])
+        update_settings({"max_withdraw": amt})
+        bot.send_message(ADMIN_ID, f"✅ সর্বোচ্চ উইথড্র লিমিট: {amt}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setmaxwith 100</code>")
+
+@bot.message_handler(commands=['setbonus'])
+def admin_set_bonus_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        amt = float(message.text.split()[1])
+        update_settings({"daily_bonus": amt})
+        bot.send_message(ADMIN_ID, f"✅ ডেইলি বোনাস: {amt}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setbonus 0.1</code>")
+
+@bot.message_handler(commands=['setphoto'])
+def admin_set_photo_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        photo_url = message.text.split(maxsplit=1)[1]
+        update_settings({"photo": photo_url})
+        bot.send_message(ADMIN_ID, f"✅ ব্যানার ফটো আপডেট হয়েছে!\n{photo_url}")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setphoto https://example.com/photo.jpg</code>")
+
+@bot.message_handler(commands=['setsupport'])
+def admin_set_support_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        new_text = message.text.split(maxsplit=1)[1]
+        update_settings({"support": new_text})
+        bot.send_message(ADMIN_ID, "✅ সাপোর্ট মেসেজ আপডেট হয়েছে!")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setsupport আপনার_মেসেজ</code>")
+
+@bot.message_handler(commands=['setlang'])
+def admin_set_lang_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        lang = message.text.split()[1].lower()
+        if lang in ["bn", "en"]:
+            update_settings({"lang": lang})
+            bot.send_message(ADMIN_ID, f"✅ ভাষা পরিবর্তন হয়েছে: {lang.upper()}")
+        else:
+            bot.send_message(ADMIN_ID, "⚠️ শুধু bn অথবা en লিখুন।")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/setlang bn</code>")
+
+@bot.message_handler(commands=['allusers'])
+def admin_all_users_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    admin_all_users_func()
+
+@bot.message_handler(commands=['user'])
+def admin_view_user_cmd(message, direct_id=None):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        uid = direct_id if direct_id else message.text.split()[1]
+        u = get_user(uid)
+        if not u:
+            bot.send_message(ADMIN_ID, "❌ User not found.")
+            return
+        currency = CACHE["settings"].get("currency", "bKash")
+        msg = f"""👤 <b>User Info:</b> <code>{uid}</code>\n📝 <b>Name:</b> {u.get('name', 'N/A')}\n🔗 <b>Username:</b> @{u.get('username', 'N/A')}\n💰 <b>Balance:</b> {float(u.get('balance', 0)):.2f} {currency}\n👥 <b>Total Refer:</b> {u.get('ref_count', 0)}\n💳 <b>Wallet:</b> <code>{u.get('wallet', 'Not Set')}</code>\n🚫 <b>Status:</b> {u.get('status', 'active')}"""
+        bot.send_message(ADMIN_ID, msg)
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/user 123456789</code>")
+
+@bot.message_handler(commands=['addbal'])
+def admin_add_balance_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    admin_do_add_funds(message)
+
+@bot.message_handler(commands=['cutbal'])
+def admin_cut_balance_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    admin_do_cut_funds(message)
+
+@bot.message_handler(commands=['ban'])
+def admin_ban_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        uid = message.text.split()[1]
+        update_user(uid, {"status": "banned"})
+        bot.send_message(ADMIN_ID, f"🚫 User {uid} Banned!")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/ban 123456789</code>")
+
+@bot.message_handler(commands=['unban'])
+def admin_unban_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    try:
+        uid = message.text.split()[1]
+        update_user(uid, {"status": "active"})
+        bot.send_message(ADMIN_ID, f"✅ User {uid} Unbanned!")
+    except:
+        bot.send_message(ADMIN_ID, "⚠️ ব্যবহার: <code>/unban 123456789</code>")
+
 @bot.message_handler(commands=['channels'])
-def admin_channels_cmd(message):
-    if str(message.chat.id) == ADMIN_ID:
-        admin_list_channels_func()
+def admin_list_channels_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    channels = get_channels()
+    text = "📢 <b>বর্তমান চ্যানেল তালিকা:</b>\n\n"
+    for k, v in channels.items():
+        if isinstance(v, dict):
+            text += f"🔹 <b>Title:</b> {v.get('title')}\n   <b>ID:</b> <code>{v.get('channel_id')}</code>\n   <b>Link:</b> {v.get('url')}\n\n"
+    bot.send_message(ADMIN_ID, text)
 
 @bot.message_handler(commands=['addchannel'])
 def admin_add_channel_cmd(message):
-    if str(message.chat.id) == ADMIN_ID:
-        admin_do_add_channel(message)
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    admin_do_add_channel(message)
 
 @bot.message_handler(commands=['delchannel'])
 def admin_del_channel_cmd(message):
-    if str(message.chat.id) == ADMIN_ID:
-        admin_do_rem_channel(message)
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    admin_do_rem_channel(message)
+
+@bot.message_handler(commands=['bcast'])
+def bcast_prompt_cmd(message):
+    if str(message.chat.id) != ADMIN_ID:
+        return
+    msg = bot.send_message(message.chat.id, "🔍 <b>Send or Forward the message to broadcast:</b>")
+    bot.register_next_step_handler(msg, send_broadcast)
 
 def send_broadcast(message):
     users = get_all_users()
@@ -729,17 +983,17 @@ def send_broadcast(message):
             count += 1
         except:
             pass
-    bot.send_message(ADMIN_ID, f"📣 <b>Broadcast সফল হয়েছে {count} জন ইউজারের কাছে!</b>")
+    bot.send_message(ADMIN_ID, f"📣 <b>Broadcast sent to {count} users!</b>")
 
-# --- 📞 SUPPORT ---
-@bot.message_handler(func=lambda m: m.text in ["SUPPORT 💸", "সাপোর্ট 💸", "/support"])
+# --- 📞 SUPPORT BUTTON ---
+@bot.message_handler(func=lambda m: m.text in ["SUPPORT 💸", "সাপোর্ট 💸"])
 def support_handler(message):
     bot.send_message(message.chat.id, CACHE["settings"].get("support"))
 
-# --- 🚀 RUN BOT WITH ERROR RECOVERY ---
+# --- 🚀 RUN BOT (TURBO FAST ENGINE) ---
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
-    print("Turbo Refer Bot is starting...")
+    print("Turbo All-In-One Bot is starting polling...")
     
     try:
         bot.delete_webhook(drop_pending_updates=True)
@@ -749,7 +1003,7 @@ if __name__ == "__main__":
 
     while True:
         try:
-            bot.infinity_polling(timeout=15, long_polling_timeout=10, skip_pending=True)
+            bot.infinity_polling(timeout=15, long_polling_timeout=10)
         except Exception as e:
-            print(f"Polling conflict/error handled: {e}")
+            print(f"Polling conflict/error: {e}")
             time.sleep(3)
