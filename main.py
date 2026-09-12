@@ -11,7 +11,6 @@ BOT_TOKEN = os.environ.get("TOKEN", "8802176680:AAFmyUJ1XIHFTVtXyLv3xcP6JdoEzj6c
 ADMIN_ID = "7166927766"  # আপনার এডমিন আইডি
 DEFAULT_CHANNEL_ID = "@FHx_Technical_Creator"
 DEFAULT_CHANNEL_URL = "https://t.me/FHx_Technical_Creator"
-PAYMENT_CHANNEL = "@FHx_Technical_Creator"
 
 # Firebase Realtime Database URL
 FIREBASE_URL = "https://tournament-ace22-default-rtdb.asia-southeast1.firebasedatabase.app"
@@ -175,7 +174,7 @@ TEXTS = {
         "wallet_saved": "✅ <b>আপনার ওয়ালেট সফলভাবে সেট হয়েছে:</b>",
         "min_with_err": "❌ সর্বনিম্ন উইথড্র পরিমাণ {min_w} টাকা।",
         "with_prompt": "💰 <b>সর্বনিম্ন:</b> {min_w} টাকা\n🚀 <b>বর্তমান ব্যালেন্স:</b> {bal} টাকা\n\n📝 <b>আপনি কত টাকা উইথড্র করতে চান লিখুন:</b>",
-        "with_success": "উইথড্র রিকোয়েস্ট সফল হয়েছে ✅\n\n💰 <b>পরিমাণ:</b> {amt} টাকা\n⏳ <b>পেমেন্ট স্ট্যাটাস:</b> Pending\n💳 <b>ওয়ালেট:</b> <code>{wal}</code>\n🔖 <b>রিকোয়েস্ট আইডি:</b> <code>{wid}</code>\n\n🔗 <b>পেমেন্ট চ্যানেল:</b> {ch}"
+        "with_success": "উইথড্র রিকোয়েস্ট সফল হয়েছে ✅\n\n💰 <b>পরিমাণ:</b> {amt} টাকা\n⏳ <b>পেমেন্ট স্ট্যাটাস:</b> Pending\n💳 <b>ওয়ালেট:</b> <code>{wal}</code>\n🔖 <b>রিকোয়েস্ট আইডি:</b> <code>{wid}</code>\n\n<i>এডমিন শীঘ্রই আপনার পেমেন্ট ভেরিফাই করে পাঠিয়ে দিবে।</i>"
     },
     "en": {
         "access_title": "🔒 <b>Access Restricted</b>\n━━━━━━━━━━━━━━━━━━━━━\n⚠️ <b>You must join all our channels to unlock bot features.</b>\n\n📢 <b>Subscribe to every channel using the buttons below.</b>\n\n✅ <b>After joining all channels, tap the Verify Membership button.</b>",
@@ -193,7 +192,7 @@ TEXTS = {
         "wallet_saved": "✅ <b>Wallet successfully updated to:</b>",
         "min_with_err": "❌ Minimum withdrawal amount is {min_w} Taka.",
         "with_prompt": "💰 <b>Minimum:</b> {min_w} Taka\n🚀 <b>Balance:</b> {bal} Taka\n\n📝 <b>Enter the amount you want to withdraw:</b>",
-        "with_success": "Withdrawal Request Successful ✅\n\n💰 <b>Amount:</b> {amt} Taka\n⏳ <b>Payment Status:</b> Pending\n💳 <b>Wallet:</b> <code>{wal}</code>\n🔖 <b>Request ID:</b> <code>{wid}</code>\n\n🔗 <b>Payment Channel:</b> {ch}"
+        "with_success": "Withdrawal Request Successful ✅\n\n💰 <b>Amount:</b> {amt} Taka\n⏳ <b>Payment Status:</b> Pending\n💳 <b>Wallet:</b> <code>{wal}</code>\n🔖 <b>Request ID:</b> <code>{wid}</code>\n\n<i>Admin will verify and process your payment shortly.</i>"
     }
 }
 
@@ -356,7 +355,7 @@ def save_wallet(message):
     update_user(user_id, {"wallet": wallet_number})
     bot.send_message(user_id, f"{get_t('wallet_saved')} <code>{wallet_number}</code>", reply_markup=main_menu())
 
-# --- 📊 STATUS (ডাইনামিক রেফার ও উইথড্র লিমিট সহ) ---
+# --- 📊 STATUS ---
 @bot.message_handler(func=lambda m: m.text in ["📊 স্ট্যাটাস", "📊 Status"])
 def status(message):
     user_id = str(message.chat.id)
@@ -377,7 +376,7 @@ def status(message):
 • 🟢 <b>Payment Status:</b> Active"""
     bot.send_message(user_id, msg)
 
-# --- 💲 WITHDRAWAL SYSTEM ---
+# --- 💲 WITHDRAWAL SYSTEM (শুধুমাত্র এডমিনের কাছে মেসেজ যাবে) ---
 @bot.message_handler(func=lambda m: m.text in ["💲 উইথড্র", "💲 Withdrawal"])
 def withdraw_prompt(message):
     user_id = str(message.chat.id)
@@ -433,6 +432,7 @@ def process_withdraw(message, balance, wallet, min_withdraw):
     }
     save_withdrawal(w_id, withdraw_data)
 
+    # শুধুমাত্র এডমিনের ইনবক্সে রিকোয়েস্ট বাটন পাঠানো
     admin_markup = types.InlineKeyboardMarkup(row_width=2)
     admin_markup.add(
         types.InlineKeyboardButton("✅ Confirm / Paid", callback_data=f"appr_{w_id}"),
@@ -442,13 +442,14 @@ def process_withdraw(message, balance, wallet, min_withdraw):
     
     try:
         bot.send_message(ADMIN_ID, admin_text, reply_markup=admin_markup)
-    except:
-        pass
+    except Exception as e:
+        print(f"Error sending to admin: {e}")
 
-    success_msg = get_t("with_success").format(amt=amount, wal=wallet, wid=w_id, ch=PAYMENT_CHANNEL)
+    # ইউজারের কাছে কনফার্মেশন পাঠানো
+    success_msg = get_t("with_success").format(amt=amount, wal=wallet, wid=w_id)
     bot.send_message(user_id, success_msg)
 
-# --- 👑 ADMIN ACTION HANDLERS ---
+# --- 👑 ADMIN ACTION HANDLERS (চ্যানেল ছাড়া শুধু এডমিন ও ইউজারের নোটিফিকেশন) ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("appr_") or call.data.startswith("rej_"))
 def handle_withdraw_admin(call):
     if str(call.from_user.id) != ADMIN_ID:
@@ -465,20 +466,14 @@ def handle_withdraw_admin(call):
     user_id = w_data["user_id"]
     amount = w_data["amount"]
     wallet = w_data["wallet"]
-    username = w_data["username"]
 
     if action == "appr":
         save_withdrawal(w_id, {**w_data, "status": "Approved"})
         bot.edit_message_text(f"{call.message.text}\n\n✅ <b>STATUS: APPROVED & PAID</b>", call.message.chat.id, call.message.message_id)
         
+        # ইউজারের কাছে পেমেন্ট সফল মেসেজ পাঠানো
         try:
             bot.send_message(user_id, f"🎉 <b>আপনার {amount} টাকা উইথড্র সফল হয়েছে এবং পেমেন্ট পাঠানো হয়েছে!</b>\n💳 Wallet: <code>{wallet}</code>")
-        except:
-            pass
-
-        try:
-            channel_msg = f"""Withdrawal Completed ✅\n\n🚀 <b>User ID:</b> <code>{user_id}</code>\n🔥 <b>Username:</b> @{username}\n💰 <b>Amount:</b> {amount} টাকা\n⏳ <b>Payment Status:</b> Approved / Paid\n💳 <b>Wallet:</b> <code>{wallet}</code>"""
-            bot.send_message(PAYMENT_CHANNEL, channel_msg)
         except:
             pass
 
@@ -490,8 +485,9 @@ def handle_withdraw_admin(call):
 
         bot.edit_message_text(f"{call.message.text}\n\n❌ <b>STATUS: REJECTED & REFUNDED</b>", call.message.chat.id, call.message.message_id)
 
+        # ইউজারের কাছে রিফান্ড মেসেজ পাঠানো
         try:
-            bot.send_message(user_id, f"❌ <b>আপনার {amount} টাকা উইথড্র বাতিল করা হয়েছে এবং টাকা রিফান্ড করা হয়েছে।</b>")
+            bot.send_message(user_id, f"❌ <b>আপনার {amount} টাকা উইথড্র বাতিল করা হয়েছে এবং টাকা আপনার একাউন্টে রিফান্ড করা হয়েছে।</b>")
         except:
             pass
 
