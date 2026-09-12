@@ -7,7 +7,7 @@ import telebot
 from telebot import types
 
 # --- ⚙️ CONFIGURATION ---
-BOT_TOKEN = os.environ.get("TOKEN", "8802176680:AAFmyUJ1XIHFTVtXyLv3xcP6JdoEzj6c6JA")
+BOT_TOKEN = os.environ.get("TOKEN", "8866225707:AAF5pFN98buwo2ygG3GYhhCjuU0u71CX3aE")
 ADMIN_ID = "7166927766"  # আপনার এডমিন আইডি
 PAYMENT_CHANNEL = "@tbpycofficial"  # নোটিফিকেশন চ্যানেল
 
