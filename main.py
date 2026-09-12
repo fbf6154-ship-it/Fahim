@@ -24,7 +24,7 @@ adapter = requests.adapters.HTTPAdapter(pool_connections=30, pool_maxsize=30)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
 
-# --- ⚡ IN-MEMORY TURBO CACHE ---
+# --- ⚡ IN-MEMORY CACHE ---
 CACHE = {
     "settings": {
         "lang": "bn",
@@ -43,12 +43,12 @@ CACHE = {
     "channels": {}
 }
 
-# --- 🌐 FLASK KEEP-ALIVE SERVER ---
+# --- 🌐 FLASK KEEP-ALIVE SERVER (Render 24/7) ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "⚡ Telegram Premium Refer Bot is Running 24/7!"
+    return "⚡ Telegram Premium Refer Bot is Running 24/7 with Turbo Engine!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -133,27 +133,34 @@ def remove_channel_from_db(ch_id):
     threading.Thread(target=lambda: session.delete(f"{FIREBASE_URL}/channels/{clean_key}.json", timeout=5)).start()
     return True
 
-# --- 🔍 ফিক্সড এবং শক্তিশালী MEMBERSHIP CHECK ---
+# --- 🔍 ১০০% এরর-প্রুফ MEMBERSHIP CHECK ---
 def is_joined(user_id):
     channels = get_channels()
     if not channels:
         channels = {"default": {"channel_id": DEFAULT_CHANNEL_ID}}
 
     for key, ch in channels.items():
-        ch_id = ch.get("channel_id") if isinstance(ch, dict) else ch
+        if isinstance(ch, dict):
+            ch_id = ch.get("channel_id", "")
+        else:
+            ch_id = str(ch)
+
         if not ch_id or not isinstance(ch_id, str):
             continue
+
+        ch_id = ch_id.strip()
+
         try:
-            member = bot.get_chat_member(ch_id.strip(), int(user_id))
-            # creator, administrator, member অথবা restricted (joined) হলে পাস
-            if member.status in ['member', 'administrator', 'creator', 'restricted']:
+            member = bot.get_chat_member(ch_id, int(user_id))
+            if member.status in ['creator', 'administrator', 'member', 'restricted']:
                 continue
             else:
+                print(f"❌ User {user_id} is not a member of {ch_id} (Status: {member.status})")
                 return False
         except Exception as e:
-            print(f"⚠️ [Verification Error] Channel: {ch_id} | User: {user_id} | Error: {e}")
-            # মনে রাখবেন: বট চ্যানেলে এডমিন না থাকলে এই ইরোর আসবে!
+            print(f"⚠️ [Verification Error] Channel: {ch_id} | User: {user_id} | Reason: {e}")
             return False
+            
     return True
 
 # --- 🌐 TEXTS ---
@@ -320,7 +327,7 @@ def verify_callback(call):
     else:
         bot.answer_callback_query(call.id, get_t("verify_fail"), show_alert=True)
 
-# --- 💰 ACCOUNT / BALANCE ---
+# --- 💰 BALANCE / ACCOUNT ---
 @bot.message_handler(func=lambda m: m.text in ["💰 BALANCE", "🖥️ একাউন্ট", "🖥️ Account", "/balance"])
 def account(message):
     user_id = str(message.chat.id)
@@ -368,7 +375,7 @@ def referral(message):
 <i>Share this link with your friends to earn rewards!</i>"""
     bot.send_message(user_id, msg, reply_markup=markup)
 
-# --- 🎁 BONUS ---
+# --- 🎁 DAILY BONUS ---
 @bot.message_handler(func=lambda m: m.text in ["🎁 BONUS", "🎁 বোনাস", "🎁 Bonus", "/bonus"])
 def daily_bonus_handler(message):
     user_id = str(message.chat.id)
@@ -578,9 +585,12 @@ def handle_withdraw_admin(call):
         except:
             pass
 
-# --- 👑 ADMIN PANEL & HELPERS ---
+# --- 👑 ADMIN PANEL & HELPERS (মোট চ্যানেল সংখ্যা সহ) ---
 def build_admin_keyboard():
     settings = get_settings()
+    channels = get_channels()
+    total_ch = len(channels)
+    
     markup = types.InlineKeyboardMarkup(row_width=2)
 
     maint_status = "✅ ON" if settings.get("maintenance") else "❌ OFF"
@@ -593,7 +603,7 @@ def build_admin_keyboard():
     )
     markup.add(
         types.InlineKeyboardButton(f"💱 Currency: {currency}", callback_data="adm_set_curr"),
-        types.InlineKeyboardButton(f"👥 Refer Bonus", callback_data="adm_set_refb")
+        types.InlineKeyboardButton(f"📢 Total Channels ({total_ch})", callback_data="adm_show_channels")
     )
     markup.add(
         types.InlineKeyboardButton("➕ Add Channel", callback_data="adm_prompt_addch"),
@@ -609,9 +619,12 @@ def build_admin_keyboard():
 def admin_panel_handler(message):
     if str(message.chat.id) != ADMIN_ID:
         return
+    channels = get_channels()
+    total_ch = len(channels)
+    
     bot.send_message(
         ADMIN_ID,
-        "👑 <b>INTERACTIVE ADMIN CONTROL PANEL</b>\n━━━━━━━━━━━━━━━━━━━━━\nনিচের অপশনগুলো ব্যবহার করুন:",
+        f"👑 <b>INTERACTIVE ADMIN CONTROL PANEL</b>\n━━━━━━━━━━━━━━━━━━━━━\n📢 <b>বর্তমান মোট চ্যানেল:</b> {total_ch} টি\n\nনিচের অপশনগুলো ব্যবহার করে কনফিগার করুন:",
         reply_markup=build_admin_keyboard()
     )
 
@@ -632,17 +645,30 @@ def admin_callbacks(call):
         new_val = not settings.get("withdraw_status", True)
         update_settings({"withdraw_status": new_val})
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=build_admin_keyboard())
+    elif data == "adm_show_channels":
+        admin_list_channels_func()
     elif data == "adm_show_allusers":
         admin_all_users_func()
     elif data == "adm_prompt_addch":
-        msg = bot.send_message(ADMIN_ID, "➕ ফরম্যাট: <code>@channelusername link Title</code>\nযেমন: <code>@FHx_Technical_Creator https://t.me/FHx_Technical_Creator Join Channel</code>")
+        msg = bot.send_message(ADMIN_ID, "➕ ফরম্যাট: <code>@username https://t.me/link বাটনের_নাম</code>\nযেমন: <code>@FHx_Technical_Creator https://t.me/FHx_Technical_Creator Join Channel 1</code>")
         bot.register_next_step_handler(msg, admin_do_add_channel)
     elif data == "adm_prompt_remch":
         msg = bot.send_message(ADMIN_ID, "➖ মুছে ফেলার জন্য চ্যানেলের ইউজারনেম দিন (যেমন: <code>@FHx_Technical_Creator</code>):")
         bot.register_next_step_handler(msg, admin_do_rem_channel)
     elif data == "adm_prompt_bcast":
-        msg = bot.send_message(ADMIN_ID, "📢 যে মেসেজটি সবাইকে পাঠাতে চান তা লিখুন:")
+        msg = bot.send_message(ADMIN_ID, "📢 যে মেসেজটি সবাইকে পাঠাতে চান তা পাঠান:")
         bot.register_next_step_handler(msg, send_broadcast)
+
+def admin_list_channels_func():
+    channels = get_channels()
+    total_ch = len(channels)
+    text = f"📢 <b>বর্তমান চ্যানেল তালিকা (মোট: {total_ch} টি):</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    i = 1
+    for k, v in channels.items():
+        if isinstance(v, dict):
+            text += f"{i}. 🔹 <b>Title:</b> {v.get('title')}\n   🆔 <b>ID:</b> <code>{v.get('channel_id')}</code>\n   🔗 <b>Link:</b> {v.get('url')}\n\n"
+            i += 1
+    bot.send_message(ADMIN_ID, text)
 
 def admin_do_add_channel(message):
     try:
@@ -652,7 +678,9 @@ def admin_do_add_channel(message):
         ch_url = parts[1]
         ch_title = parts[2] if len(parts) > 2 else "🔗 Join Channel"
         save_channel_to_db(ch_id, ch_url, ch_title)
-        bot.send_message(ADMIN_ID, f"✅ চ্যানেল যুক্ত হয়েছে:\n🔹 ID: {ch_id}\n🔹 Title: {ch_title}\n\n⚠️ <b>অবশ্যই বটকে ওই চ্যানেলে Admin বানিয়ে নিন!</b>")
+        
+        total_ch = len(get_channels())
+        bot.send_message(ADMIN_ID, f"✅ চ্যানেল যুক্ত হয়েছে!\n🔹 ID: {ch_id}\n🔹 Title: {ch_title}\n\n📢 <b>বর্তমান মোট চ্যানেল:</b> {total_ch} টি\n⚠️ <i>বটকে ওই চ্যানেলে Admin বানিয়ে রাখুন।</i>")
     except Exception as e:
         bot.send_message(ADMIN_ID, f"⚠️ ভুল ফরম্যাট! Error: {e}")
 
@@ -660,9 +688,10 @@ def admin_do_rem_channel(message):
     try:
         ch_id = message.text.replace("/delchannel", "").strip()
         remove_channel_from_db(ch_id)
-        bot.send_message(ADMIN_ID, f"🗑️ চ্যানেল মুছে ফেলা হয়েছে: {ch_id}")
-    except:
-        bot.send_message(ADMIN_ID, "⚠️ সমস্যা হয়েছে!")
+        total_ch = len(get_channels())
+        bot.send_message(ADMIN_ID, f"🗑️ চ্যানেল মুছে ফেলা হয়েছে: {ch_id}\n📢 <b>বর্তমান মোট চ্যানেল:</b> {total_ch} টি")
+    except Exception as e:
+        bot.send_message(ADMIN_ID, f"⚠️ সমস্যা হয়েছে: {e}")
 
 def admin_all_users_func():
     users = get_all_users()
@@ -675,6 +704,11 @@ def admin_all_users_func():
         if isinstance(u, dict):
             report += f"🆔 <code>{uid}</code> | {u.get('name','N/A')} | 💰 {float(u.get('balance',0)):.2f} {currency}\n"
     bot.send_message(ADMIN_ID, report)
+
+@bot.message_handler(commands=['channels'])
+def admin_channels_cmd(message):
+    if str(message.chat.id) == ADMIN_ID:
+        admin_list_channels_func()
 
 @bot.message_handler(commands=['addchannel'])
 def admin_add_channel_cmd(message):
@@ -702,7 +736,7 @@ def send_broadcast(message):
 def support_handler(message):
     bot.send_message(message.chat.id, CACHE["settings"].get("support"))
 
-# --- 🚀 RUN BOT ---
+# --- 🚀 RUN BOT WITH ERROR RECOVERY ---
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     print("Turbo Refer Bot is starting...")
@@ -715,7 +749,7 @@ if __name__ == "__main__":
 
     while True:
         try:
-            bot.infinity_polling(timeout=15, long_polling_timeout=10)
+            bot.infinity_polling(timeout=15, long_polling_timeout=10, skip_pending=True)
         except Exception as e:
-            print(f"Polling error: {e}")
+            print(f"Polling conflict/error handled: {e}")
             time.sleep(3)
