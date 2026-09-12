@@ -15,69 +15,86 @@ DEFAULT_CHANNEL_URL = "https://t.me/FHx_Technical_Creator"
 # Firebase Realtime Database URL
 FIREBASE_URL = "https://tournament-ace22-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+# ⚡ মাল্টি-থ্রেডিং বুস্ট (একসাথে ২০টি থ্রেডে সুপার ফাস্ট কাজ করবে)
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=True, num_threads=20)
+
+# ⚡ HTTP Connection Pooling (কানেকশন ফাস্ট রাখার জন্য)
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+session.mount('https://', adapter)
+session.mount('http://', adapter)
+
+# --- ⚡ IN-MEMORY ULTRA-FAST CACHE ---
+CACHE = {
+    "settings": {
+        "lang": "bn",
+        "photo": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800",
+        "support": "☎️ <b>উইথড্র দেওয়ার ২৪ ঘন্টার মধ্যে পেমেন্ট না পেলে যোগাযোগ করুন:</b>\n👤 @Promoter_from_bd\n\n📢 <b>উইথড্র দেওয়ার পর অবশ্যই নক দিবেন:</b> @FHx_Technical_Creator",
+        "min_withdraw": 10.0,
+        "refer_bonus": 1.0
+    },
+    "channels": {}
+}
 
 # --- 🌐 FLASK KEEP-ALIVE SERVER (Render 24/7) ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Telegram Refer & Admin Bot is Running 24/7 with UptimeRobot!"
+    return "⚡ Telegram Refer & Admin Bot is Running Super Fast (24/7)!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
-# --- 🗄️ FIREBASE DATABASE FUNCTIONS ---
-def get_settings():
+# --- 🗄️ FIREBASE DATABASE FUNCTIONS (TURBO OPTIMIZED) ---
+def load_initial_cache():
     try:
-        res = requests.get(f"{FIREBASE_URL}/settings.json", timeout=5)
-        data = res.json() or {}
-        return {
-            "lang": data.get("lang", "bn"),
-            "photo": data.get("photo", "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800"),
-            "support": data.get("support", "☎️ <b>উইথড্র দেওয়ার ২৪ ঘন্টার মধ্যে পেমেন্ট না পেলে যোগাযোগ করুন:</b>\n👤 @Promoter_from_bd\n\n📢 <b>উইথড্র দেওয়ার পর অবশ্যই নক দিবেন:</b> @FHx_Technical_Creator"),
-            "min_withdraw": float(data.get("min_withdraw", 10.0)),
-            "refer_bonus": float(data.get("refer_bonus", 1.0))
-        }
-    except:
-        return {
-            "lang": "bn",
-            "photo": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800",
-            "support": "☎️ <b>উইথড্র দেওয়ার ২৪ ঘন্টার মধ্যে পেমেন্ট না পেলে যোগাযোগ করুন:</b>\n👤 @Promoter_from_bd\n\n📢 <b>উইথড্র দেওয়ার পর অবশ্যই নক দিবেন:</b> @FHx_Technical_Creator",
-            "min_withdraw": 10.0,
-            "refer_bonus": 1.0
-        }
+        # Settings Cache
+        res = session.get(f"{FIREBASE_URL}/settings.json", timeout=3)
+        if res.status_code == 200 and res.json():
+            CACHE["settings"].update(res.json())
+        
+        # Channels Cache
+        res2 = session.get(f"{FIREBASE_URL}/channels.json", timeout=3)
+        if res2.status_code == 200 and res2.json():
+            data = res2.json()
+            if isinstance(data, dict):
+                CACHE["channels"] = data
+            elif isinstance(data, list):
+                CACHE["channels"] = {str(i): v for i, v in enumerate(data) if isinstance(v, dict)}
+    except Exception as e:
+        print(f"Cache init error: {e}")
+
+load_initial_cache()
+
+def get_settings():
+    return CACHE["settings"]
 
 def update_settings(data):
-    try:
-        requests.patch(f"{FIREBASE_URL}/settings.json", json=data, timeout=5)
-    except Exception as e:
-        print(f"Error updating settings: {e}")
+    CACHE["settings"].update(data)
+    threading.Thread(target=lambda: session.patch(f"{FIREBASE_URL}/settings.json", json=data, timeout=5)).start()
 
 def get_user(user_id):
     try:
-        res = requests.get(f"{FIREBASE_URL}/users/{user_id}.json", timeout=5)
+        res = session.get(f"{FIREBASE_URL}/users/{user_id}.json", timeout=2)
         return res.json() or {}
     except:
         return {}
 
 def update_user(user_id, data):
-    try:
-        requests.patch(f"{FIREBASE_URL}/users/{user_id}.json", json=data, timeout=5)
-    except Exception as e:
-        print(f"Error updating user: {e}")
+    threading.Thread(target=lambda: session.patch(f"{FIREBASE_URL}/users/{user_id}.json", json=data, timeout=5)).start()
 
 def delete_user_from_db(user_id):
     try:
-        requests.delete(f"{FIREBASE_URL}/users/{user_id}.json", timeout=5)
+        session.delete(f"{FIREBASE_URL}/users/{user_id}.json", timeout=3)
         return True
     except:
         return False
 
 def get_all_users():
     try:
-        res = requests.get(f"{FIREBASE_URL}/users.json", timeout=5)
+        res = session.get(f"{FIREBASE_URL}/users.json", timeout=3)
         data = res.json()
         if isinstance(data, dict):
             return data
@@ -88,61 +105,38 @@ def get_all_users():
         return {}
 
 def save_withdrawal(w_id, data):
-    try:
-        requests.put(f"{FIREBASE_URL}/withdrawals/{w_id}.json", json=data, timeout=5)
-    except Exception as e:
-        print(f"Error saving withdrawal: {e}")
+    threading.Thread(target=lambda: session.put(f"{FIREBASE_URL}/withdrawals/{w_id}.json", json=data, timeout=5)).start()
 
 def get_withdrawal(w_id):
     try:
-        res = requests.get(f"{FIREBASE_URL}/withdrawals/{w_id}.json", timeout=5)
+        res = session.get(f"{FIREBASE_URL}/withdrawals/{w_id}.json", timeout=3)
         return res.json()
     except:
         return None
 
-# --- 📢 DYNAMIC CHANNELS MANAGEMENT ---
+# --- 📢 DYNAMIC CHANNELS (SUPER FAST CACHED) ---
 def get_channels():
-    try:
-        res = requests.get(f"{FIREBASE_URL}/channels.json", timeout=5)
-        data = res.json()
-        clean_channels = {}
-        if isinstance(data, dict):
-            for k, v in data.items():
-                if isinstance(v, dict):
-                    clean_channels[k] = v
-                elif isinstance(v, str) and not v.startswith("{"):
-                    clean_channels[k] = {
-                        "channel_id": v,
-                        "url": f"https://t.me/{v.replace('@', '')}",
-                        "title": "🔗 Join Channel"
-                    }
-        return clean_channels
-    except:
-        return {}
+    if not CACHE["channels"]:
+        return {"default": {"channel_id": DEFAULT_CHANNEL_ID, "url": DEFAULT_CHANNEL_URL, "title": "🔗 Join Channel 1"}}
+    return CACHE["channels"]
 
 def save_channel_to_db(ch_id, url, title):
-    try:
-        clean_key = ch_id.replace("@", "").replace("-", "_").replace(".", "_")
-        payload = {"channel_id": ch_id, "url": url, "title": title}
-        requests.put(f"{FIREBASE_URL}/channels/{clean_key}.json", json=payload, timeout=5)
-        return True
-    except:
-        return False
+    clean_key = ch_id.replace("@", "").replace("-", "_").replace(".", "_")
+    payload = {"channel_id": ch_id, "url": url, "title": title}
+    CACHE["channels"][clean_key] = payload
+    threading.Thread(target=lambda: session.put(f"{FIREBASE_URL}/channels/{clean_key}.json", json=payload, timeout=5)).start()
+    return True
 
 def remove_channel_from_db(ch_id):
-    try:
-        clean_key = ch_id.replace("@", "").replace("-", "_").replace(".", "_")
-        requests.delete(f"{FIREBASE_URL}/channels/{clean_key}.json", timeout=5)
-        return True
-    except:
-        return False
+    clean_key = ch_id.replace("@", "").replace("-", "_").replace(".", "_")
+    if clean_key in CACHE["channels"]:
+        del CACHE["channels"][clean_key]
+    threading.Thread(target=lambda: session.delete(f"{FIREBASE_URL}/channels/{clean_key}.json", timeout=5)).start()
+    return True
 
 # --- 🔍 STRICT MEMBERSHIP CHECK ---
 def is_joined(user_id):
     channels = get_channels()
-    if not channels:
-        channels = {"default": {"channel_id": DEFAULT_CHANNEL_ID}}
-
     for key, ch in channels.items():
         ch_id = ch.get("channel_id") if isinstance(ch, dict) else ch
         if not ch_id or not isinstance(ch_id, str):
@@ -151,8 +145,7 @@ def is_joined(user_id):
             member = bot.get_chat_member(ch_id, user_id)
             if member.status not in ['member', 'administrator', 'creator']:
                 return False
-        except Exception as e:
-            print(f"Channel check error for {ch_id}: {e}")
+        except Exception:
             return False
     return True
 
@@ -197,8 +190,7 @@ TEXTS = {
 }
 
 def get_t(key):
-    settings = get_settings()
-    lang = settings.get("lang", "bn")
+    lang = CACHE["settings"].get("lang", "bn")
     return TEXTS.get(lang, TEXTS["bn"]).get(key, "")
 
 # --- ⌨️ KEYBOARDS ---
@@ -214,18 +206,11 @@ def join_keyboard():
     markup = types.InlineKeyboardMarkup()
     channels = get_channels()
     
-    valid_channels = False
-    if channels:
-        for key, ch in channels.items():
-            if isinstance(ch, dict) and "url" in ch and "http" in ch.get("url", ""):
-                btn_title = ch.get("title", "🔗 Join Channel 1")
-                btn_url = ch.get("url")
-                if "deactivated" not in btn_url and "error" not in btn_url:
-                    markup.add(types.InlineKeyboardButton(btn_title, url=btn_url))
-                    valid_channels = True
-        
-    if not valid_channels:
-        markup.add(types.InlineKeyboardButton("🔗 Join Channel 1", url=DEFAULT_CHANNEL_URL))
+    for key, ch in channels.items():
+        if isinstance(ch, dict) and "url" in ch:
+            btn_title = ch.get("title", "🔗 Join Channel 1")
+            btn_url = ch.get("url")
+            markup.add(types.InlineKeyboardButton(btn_title, url=btn_url))
         
     markup.add(types.InlineKeyboardButton(get_t("verify_btn"), callback_data="verify_membership"))
     return markup
@@ -236,7 +221,6 @@ def start(message):
     user_id = str(message.chat.id)
     text_split = message.text.split()
     user_data = get_user(user_id)
-    settings = get_settings()
 
     first_name = message.from_user.first_name or "No Name"
     username = message.from_user.username or "No Username"
@@ -257,7 +241,7 @@ def start(message):
         update_user(user_id, new_data)
 
     welcome_text = get_t("access_title")
-    img_url = settings.get("photo")
+    img_url = CACHE["settings"].get("photo")
 
     try:
         bot.send_photo(user_id, photo=img_url, caption=welcome_text, reply_markup=join_keyboard())
@@ -270,8 +254,7 @@ def verify_callback(call):
     user_id = str(call.from_user.id)
     if is_joined(user_id):
         user_data = get_user(user_id)
-        settings = get_settings()
-        refer_bonus = settings.get("refer_bonus", 1.0)
+        refer_bonus = CACHE["settings"].get("refer_bonus", 1.0)
         
         referrer_id = user_data.get("referred_by")
         if referrer_id and not user_data.get("bonus_claimed"):
@@ -307,8 +290,7 @@ def account(message):
     balance = user_data.get("balance", 0.0)
     wallet = user_data.get("wallet", "Not Set")
 
-    settings = get_settings()
-    if settings.get("lang") == "en":
+    if CACHE["settings"].get("lang") == "en":
         msg = f"""🙍‍♂️ <b>Your Name:</b> {first_name}\n🔥 <b>Username:</b> @{username}\n🚀 <b>User ID:</b> <code>{user_id}</code>\n💳 <b>Wallet:</b> <code>{wallet}</code>\n💰 <b>Balance:</b> {balance} Taka"""
     else:
         msg = f"""🙍‍♂️ <b>আপনার নাম:</b> {first_name}\n🔥 <b>ইউজারনেম:</b> @{username}\n🚀 <b>ইউজার আইডি:</b> <code>{user_id}</code>\n💳 <b>ওয়ালেট:</b> <code>{wallet}</code>\n💰 <b>ব্যালেন্স:</b> {balance} টাকা"""
@@ -318,14 +300,13 @@ def account(message):
 def referral(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
-    settings = get_settings()
-    ref_bonus = settings.get("refer_bonus", 1.0)
+    ref_bonus = CACHE["settings"].get("refer_bonus", 1.0)
     
     bot_info = bot.get_me()
     ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
     ref_count = user_data.get("ref_count", 0)
 
-    if settings.get("lang") == "en":
+    if CACHE["settings"].get("lang") == "en":
         msg = f"""🏅 <b>Per Referral:</b> {ref_bonus} Taka\n\n📎 <b>Your Referral Link:</b>\n{ref_link}\n\n📊 <b>Your Total Referrals:</b> {ref_count}\n\n🚫 <i>Fake and cheat referrals will not be paid</i>"""
     else:
         msg = f"""🏅 <b>প্রতি রেফার:</b> {ref_bonus} টাকা\n\n📎 <b>আপনার রেফারেল লিংক:</b>\n{ref_link}\n\n📊 <b>আপনার মোট রেফার:</b> {ref_count} জন\n\n🚫 <i>ফেক বা চিটিং রেফার করলে পেমেন্ট পাবেন না</i>"""
@@ -337,8 +318,7 @@ def wallet(message):
     user_data = get_user(user_id)
     current_wallet = user_data.get("wallet", "Not Set")
 
-    settings = get_settings()
-    if settings.get("lang") == "en":
+    if CACHE["settings"].get("lang") == "en":
         msg = f"""💳 <b>Current Wallet:</b> <code>{current_wallet}</code>\n\n⚙️ To set or change your wallet, click here: /SetWallet"""
     else:
         msg = f"""💳 <b>বর্তমান ওয়ালেট:</b> <code>{current_wallet}</code>\n\n⚙️ ওয়ালেট পরিবর্তন করতে এখানে চাপুন: /SetWallet"""
@@ -360,10 +340,9 @@ def save_wallet(message):
 def status(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
-    settings = get_settings()
     
-    ref_bonus = settings.get("refer_bonus", 1.0)
-    min_w = settings.get("min_withdraw", 10.0)
+    ref_bonus = CACHE["settings"].get("refer_bonus", 1.0)
+    min_w = CACHE["settings"].get("min_withdraw", 10.0)
     ref_count = user_data.get("ref_count", 0)
     balance = user_data.get("balance", 0.0)
 
@@ -376,15 +355,14 @@ def status(message):
 • 🟢 <b>Payment Status:</b> Active"""
     bot.send_message(user_id, msg)
 
-# --- 💲 WITHDRAWAL SYSTEM (শুধুমাত্র এডমিনের কাছে মেসেজ যাবে) ---
+# --- 💲 WITHDRAWAL SYSTEM ---
 @bot.message_handler(func=lambda m: m.text in ["💲 উইথড্র", "💲 Withdrawal"])
 def withdraw_prompt(message):
     user_id = str(message.chat.id)
     user_data = get_user(user_id)
-    settings = get_settings()
     
     balance = float(user_data.get("balance", 0))
-    min_withdraw = settings.get("min_withdraw", 10.0)
+    min_withdraw = CACHE["settings"].get("min_withdraw", 10.0)
     wallet = user_data.get("wallet", "Not Set")
 
     if wallet == "Not Set":
@@ -432,7 +410,6 @@ def process_withdraw(message, balance, wallet, min_withdraw):
     }
     save_withdrawal(w_id, withdraw_data)
 
-    # শুধুমাত্র এডমিনের ইনবক্সে রিকোয়েস্ট বাটন পাঠানো
     admin_markup = types.InlineKeyboardMarkup(row_width=2)
     admin_markup.add(
         types.InlineKeyboardButton("✅ Confirm / Paid", callback_data=f"appr_{w_id}"),
@@ -445,11 +422,10 @@ def process_withdraw(message, balance, wallet, min_withdraw):
     except Exception as e:
         print(f"Error sending to admin: {e}")
 
-    # ইউজারের কাছে কনফার্মেশন পাঠানো
     success_msg = get_t("with_success").format(amt=amount, wal=wallet, wid=w_id)
     bot.send_message(user_id, success_msg)
 
-# --- 👑 ADMIN ACTION HANDLERS (চ্যানেল ছাড়া শুধু এডমিন ও ইউজারের নোটিফিকেশন) ---
+# --- 👑 ADMIN ACTION HANDLERS ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("appr_") or call.data.startswith("rej_"))
 def handle_withdraw_admin(call):
     if str(call.from_user.id) != ADMIN_ID:
@@ -470,8 +446,6 @@ def handle_withdraw_admin(call):
     if action == "appr":
         save_withdrawal(w_id, {**w_data, "status": "Approved"})
         bot.edit_message_text(f"{call.message.text}\n\n✅ <b>STATUS: APPROVED & PAID</b>", call.message.chat.id, call.message.message_id)
-        
-        # ইউজারের কাছে পেমেন্ট সফল মেসেজ পাঠানো
         try:
             bot.send_message(user_id, f"🎉 <b>আপনার {amount} টাকা উইথড্র সফল হয়েছে এবং পেমেন্ট পাঠানো হয়েছে!</b>\n💳 Wallet: <code>{wallet}</code>")
         except:
@@ -484,14 +458,12 @@ def handle_withdraw_admin(call):
         save_withdrawal(w_id, {**w_data, "status": "Rejected"})
 
         bot.edit_message_text(f"{call.message.text}\n\n❌ <b>STATUS: REJECTED & REFUNDED</b>", call.message.chat.id, call.message.message_id)
-
-        # ইউজারের কাছে রিফান্ড মেসেজ পাঠানো
         try:
             bot.send_message(user_id, f"❌ <b>আপনার {amount} টাকা উইথড্র বাতিল করা হয়েছে এবং টাকা আপনার একাউন্টে রিফান্ড করা হয়েছে।</b>")
         except:
             pass
 
-# --- 👑 ADMIN DYNAMIC SETTINGS COMMANDS ---
+# --- 👑 ADMIN COMMANDS ---
 @bot.message_handler(commands=['setrefer'])
 def admin_set_refer(message):
     if str(message.chat.id) != ADMIN_ID:
@@ -574,8 +546,7 @@ def admin_all_users(message):
 # --- SUPPORT BUTTON ---
 @bot.message_handler(func=lambda m: m.text == "SUPPORT 💸")
 def support(message):
-    settings = get_settings()
-    bot.send_message(message.chat.id, settings.get("support"))
+    bot.send_message(message.chat.id, CACHE["settings"].get("support"))
 
 # --- 👑 OTHER ADMIN COMMANDS ---
 @bot.message_handler(commands=['admin'])
@@ -725,20 +696,20 @@ def send_broadcast(message):
             pass
     bot.send_message(ADMIN_ID, f"📣 <b>Broadcast sent to {count} users!</b>")
 
-# --- 🚀 RUN BOT ---
+# --- 🚀 RUN BOT (FAST POLLING) ---
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
-    print("Bot is starting polling...")
+    print("Turbo Bot is starting polling...")
     
     try:
         bot.delete_webhook(drop_pending_updates=True)
-        time.sleep(2)
+        time.sleep(1)
     except Exception as e:
         print(f"Webhook clear error: {e}")
 
     while True:
         try:
-            bot.infinity_polling(timeout=10, long_polling_timeout=5)
+            bot.infinity_polling(timeout=15, long_polling_timeout=10)
         except Exception as e:
             print(f"Polling conflict/error: {e}")
-            time.sleep(5)
+            time.sleep(3)
