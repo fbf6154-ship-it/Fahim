@@ -7,7 +7,8 @@ import telebot
 from telebot import types
 
 # --- ⚙️ কনফিগারেশন ---
-BOT_TOKEN = os.environ.get("TOKEN", "8802176680:AAFmyUJ1XIHFTVtXyLv3xcP6JdoEzj6c6JA")
+# আপনার নতুন বট টোকেন সরাসরি কোডে সেট করা হয়েছে
+BOT_TOKEN = "8866225707:AAEOrOOS-93XVcV8SRVI22BKjm3q5TEj6Jw"
 ADMIN_ID = "7166927766"  # এডমিন আইডি
 DEFAULT_CHANNEL_ID = "@FHx_Technical_Creator"
 DEFAULT_CHANNEL_URL = "https://t.me/FHx_Technical_Creator"
@@ -147,7 +148,7 @@ def is_joined(user_id):
             return False
     return True
 
-# --- 🎨 স্ক্রিনশটের মতো ডাইনামিক জয়েন মেসেজ ও কিবোর্ড ---
+# --- 🎨 ডাইনামিক জয়েন মেসেজ ও কিবোর্ড ---
 def build_join_ui():
     channels = get_channels()
     text = "⚠️ <b>বটের চ্যানেলগুলোতে জয়েন করুন:</b>\n"
@@ -166,7 +167,6 @@ def build_join_ui():
 
     text += "\nজয়েন করা শেষে নিচের বাটনে ক্লিক করুন:"
 
-    # বাটন ২ কলামে বিন্যাস
     for i in range(0, len(buttons), 2):
         if i + 1 < len(buttons):
             markup.row(buttons[i], buttons[i+1])
@@ -360,7 +360,7 @@ def bonus_handler(message):
 👉 <b>{hours} ঘণ্টা {minutes} মিনিট</b> পর আবার আসুন!"""
         bot.send_message(user_id, msg)
 
-# --- 🔋 স্ট্যাটাস (আপনার ফরম্যাট অনুযায়ী তৈরি ইউজার প্রোফাইল) ---
+# --- 🔋 স্ট্যাটাস ---
 @bot.message_handler(func=lambda m: m.text in ["🔋 স্ট্যাটাস", "🔋 STATISTICS", "📊 স্ট্যাটাস"])
 def stats_handler(message):
     user_id = str(message.chat.id)
@@ -605,7 +605,6 @@ def admin_callbacks(call):
         update_settings({"withdraw_status": new_val})
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=admin_main_menu_markup())
 
-    # --- 📢 চ্যানেল ম্যানেজার ---
     elif data == "adm_channel_mgr":
         channels = get_channels()
         markup = types.InlineKeyboardMarkup(row_width=1)
@@ -653,7 +652,6 @@ def admin_callbacks(call):
         )
         bot.register_next_step_handler(msg, process_add_channel_step)
 
-    # --- 👥 ইউজার ম্যানেজার ---
     elif data == "adm_user_mgr":
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
@@ -695,7 +693,6 @@ def admin_callbacks(call):
         msg = bot.send_message(ADMIN_ID, "➖ <b>ফরম্যাট:</b> <code>User_ID Amount</code>\nউদাহরণ: <code>5889152252 20</code>")
         bot.register_next_step_handler(msg, admin_cut_balance_step)
 
-    # --- ⚙️ সেটিংস ও ব্যানার ইমেজ ---
     elif data == "adm_set_curr":
         msg = bot.send_message(ADMIN_ID, "💱 <b>নতুন কারেন্সি নাম লিখুন (যেমন: টাকা, bKash, BDT):</b>")
         bot.register_next_step_handler(msg, lambda m: [update_settings({"currency": m.text.strip()}), bot.send_message(ADMIN_ID, f"✅ কারেন্সি আপডেট হয়েছে: <b>{m.text.strip()}</b>")])
